@@ -11,45 +11,28 @@ import { billingRouter } from './routes/billing.routes';
 import { organizationsRouter } from './routes/organizations.routes';
 import { authMiddleware } from './middleware/auth.middleware';
 import { organizationMiddleware } from './middleware/organization.middleware';
-import { globalRateLimiter } from './middleware/rateLimit.middleware';
+// Temporarily disable rate limiter until stable
+// import { globalRateLimiter } from './middleware/rateLimit.middleware';
 
 const app = express();
 
+/* ─────────────────────────────────────────────
+   TRUST PROXY (REQUIRED FOR RAILWAY)
+───────────────────────────────────────────── */
 app.set('trust proxy', 1);
-/* ─────────────────────────────────────────────
-   PORT CONFIG (Railway Compatible)
-───────────────────────────────────────────── */
-const PORT = Number(process.env.PORT) || 8080;
 
 /* ─────────────────────────────────────────────
-   SECURITY & CORE MIDDLEWARE
+   PORT (MUST USE RAILWAY PROVIDED PORT)
 ───────────────────────────────────────────── */
-app.use(helmet());
+const PORT = Number(process.env.PORT);
 
-// For production, lock this down properly
-app.use(
-  cors({
-    origin: process.env.ALLOWED_ORIGINS
-      ? process.env.ALLOWED_ORIGINS.split(',')
-      : '*',
-  })
-);
-
-// Stripe webhook must be raw BEFORE json parser
-app.use('/api/webhook/stripe', express.raw({ type: 'application/json' }));
-
-app.use(express.json());
+if (!PORT) {
+  throw new Error('PORT environment variable not set');
+}
 
 /* ─────────────────────────────────────────────
-   GLOBAL RATE LIMITER
+   BASIC ROOT ROUTE (FOR RAILWAY HEALTH)
 ───────────────────────────────────────────── */
-app.use(globalRateLimiter);
-
-/* ─────────────────────────────────────────────
-   BASIC HEALTH & ROOT ROUTES
-───────────────────────────────────────────── */
-
-// Railway sometimes checks root
 app.get('/', (_req, res) => {
   res.send('Marketing OS Backend Running');
 });
@@ -61,6 +44,29 @@ app.get('/health', (_req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+/* ─────────────────────────────────────────────
+   SECURITY & CORE MIDDLEWARE
+───────────────────────────────────────────── */
+app.use(helmet());
+
+app.use(
+  cors({
+    origin: process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(',')
+      : '*',
+  })
+);
+
+// Stripe webhook must be mounted BEFORE express.json
+app.use('/api/webhook/stripe', express.raw({ type: 'application/json' }));
+
+app.use(express.json());
+
+/* ─────────────────────────────────────────────
+   RATE LIMITER (ENABLE LATER WHEN STABLE)
+───────────────────────────────────────────── */
+// app.use(globalRateLimiter);
 
 /* ─────────────────────────────────────────────
    AUTHENTICATED API ROUTES
@@ -79,7 +85,7 @@ api.use('/organizations', organizationsRouter);
 app.use('/api', api);
 
 /* ─────────────────────────────────────────────
-   BILLING ROUTES (Webhook unauthenticated)
+   BILLING ROUTES (WEBHOOK UNAUTHENTICATED)
 ───────────────────────────────────────────── */
 app.use('/api', billingRouter);
 
@@ -96,15 +102,27 @@ app.use(
     console.error('[ERROR]', err);
     res.status(500).json({
       error: 'Internal server error',
-      message: process.env.NODE_ENV === 'production'
-        ? 'Something went wrong'
-        : err.message,
+      message:
+        process.env.NODE_ENV === 'production'
+          ? 'Something went wrong'
+          : err.message,
     });
   }
 );
 
 /* ─────────────────────────────────────────────
-   START SERVER (CRITICAL FOR RAILWAY)
+   PREVENT SILENT CRASHES
+───────────────────────────────────────────── */
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled Rejection:', err);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+
+/* ─────────────────────────────────────────────
+   START SERVER
 ───────────────────────────────────────────── */
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`marketing-os-core running on :${PORT}`);
