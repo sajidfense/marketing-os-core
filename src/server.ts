@@ -14,44 +14,99 @@ import { organizationMiddleware } from './middleware/organization.middleware';
 import { globalRateLimiter } from './middleware/rateLimit.middleware';
 
 const app = express();
-const PORT = process.env.PORT ?? 3000;
 
-// ── Security & parsing ──────────────────────────────────────────
+/* ─────────────────────────────────────────────
+   PORT CONFIG (Railway Compatible)
+───────────────────────────────────────────── */
+const PORT = Number(process.env.PORT) || 8080;
+
+/* ─────────────────────────────────────────────
+   SECURITY & CORE MIDDLEWARE
+───────────────────────────────────────────── */
 app.use(helmet());
-app.use(cors({ origin: process.env.ALLOWED_ORIGINS?.split(',') ?? '*' }));
 
-// Stripe webhook needs raw body — mount before json parser
+// For production, lock this down properly
+app.use(
+  cors({
+    origin: process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(',')
+      : '*',
+  })
+);
+
+// Stripe webhook must be raw BEFORE json parser
 app.use('/api/webhook/stripe', express.raw({ type: 'application/json' }));
+
 app.use(express.json());
 
-// ── Global rate limiter ─────────────────────────────────────────
+/* ─────────────────────────────────────────────
+   GLOBAL RATE LIMITER
+───────────────────────────────────────────── */
 app.use(globalRateLimiter);
 
-// ── Health ──────────────────────────────────────────────────────
-app.get('/health', (_req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
+/* ─────────────────────────────────────────────
+   BASIC HEALTH & ROOT ROUTES
+───────────────────────────────────────────── */
 
-// ── Authenticated routes ────────────────────────────────────────
+// Railway sometimes checks root
+app.get('/', (_req, res) => {
+  res.send('Marketing OS Backend Running');
+});
+
+app.get('/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    environment: process.env.NODE_ENV || 'unknown',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/* ─────────────────────────────────────────────
+   AUTHENTICATED API ROUTES
+───────────────────────────────────────────── */
 const api = express.Router();
+
 api.use(authMiddleware);
 api.use(organizationMiddleware);
 
-api.use('/skills',        skillsRouter);
-api.use('/bookings',      bookingsRouter);
-api.use('/campaigns',     campaignsRouter);
-api.use('/workflows',     workflowsRouter);
+api.use('/skills', skillsRouter);
+api.use('/bookings', bookingsRouter);
+api.use('/campaigns', campaignsRouter);
+api.use('/workflows', workflowsRouter);
 api.use('/organizations', organizationsRouter);
 
 app.use('/api', api);
 
-// Billing has mixed auth (webhook is unauthenticated)
+/* ─────────────────────────────────────────────
+   BILLING ROUTES (Webhook unauthenticated)
+───────────────────────────────────────────── */
 app.use('/api', billingRouter);
 
-// ── Global error handler ────────────────────────────────────────
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('[ERROR]', err);
-  res.status(500).json({ error: 'Internal server error', message: err.message });
-});
+/* ─────────────────────────────────────────────
+   GLOBAL ERROR HANDLER
+───────────────────────────────────────────── */
+app.use(
+  (
+    err: Error,
+    _req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction
+  ) => {
+    console.error('[ERROR]', err);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: process.env.NODE_ENV === 'production'
+        ? 'Something went wrong'
+        : err.message,
+    });
+  }
+);
 
-app.listen(PORT, () => console.log(`marketing-os-core running on :${PORT}`));
+/* ─────────────────────────────────────────────
+   START SERVER (CRITICAL FOR RAILWAY)
+───────────────────────────────────────────── */
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`marketing-os-core running on :${PORT}`);
+});
 
 export default app;
