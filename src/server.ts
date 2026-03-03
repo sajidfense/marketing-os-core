@@ -15,6 +15,7 @@ import { globalRateLimiter } from './middleware/rateLimit.middleware';
 
 const app = express();
 
+app.set('trust proxy', 1);
 /* ─────────────────────────────────────────────
    PORT CONFIG (Railway Compatible)
 ───────────────────────────────────────────── */
