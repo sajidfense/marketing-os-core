@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { MessageSquare, Loader2, Copy, Download, Sparkles, Clock, Hash } from 'lucide-react';
 import { api, ApiError } from '@/services/api';
+import { useCredits } from '@/contexts/CreditsContext';
+import { CreditCostBadge } from '@/components/shared/CreditCostBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
@@ -30,6 +32,7 @@ interface SkillResult {
 }
 
 export default function SocialCaptions() {
+  const { isExhausted, refresh: refreshCredits } = useCredits();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CaptionOutput | null>(null);
 
@@ -55,9 +58,11 @@ export default function SocialCaptions() {
         setResult(res.data.output);
         toast.success('Captions generated');
       }
+      refreshCredits();
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Generation failed';
       toast.error(msg);
+      refreshCredits();
     } finally {
       setLoading(false);
     }
@@ -139,9 +144,10 @@ export default function SocialCaptions() {
                 <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Brand Voice (optional)</label>
                 <Input value={brandVoice} onChange={(e) => setBrandVoice(e.target.value)} placeholder="e.g. modern and confident" />
               </div>
-              <Button type="submit" className="w-full gap-2" disabled={loading || !topic.trim()}>
+              <Button type="submit" className="w-full gap-2" disabled={loading || !topic.trim() || isExhausted}>
                 {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                 {loading ? 'Generating...' : 'Generate Captions'}
+                <CreditCostBadge skillType="social-caption" />
               </Button>
             </form>
           </CardContent>

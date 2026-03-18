@@ -15,6 +15,8 @@ import {
   Check,
 } from 'lucide-react';
 import { api, ApiError } from '@/services/api';
+import { useCredits } from '@/contexts/CreditsContext';
+import { CreditCostBadge } from '@/components/shared/CreditCostBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
@@ -146,6 +148,7 @@ function AnalysisSkeleton() {
 
 export default function SEOAnalyzerPage() {
   const navigate = useNavigate();
+  const { isExhausted, refresh: refreshCredits } = useCredits();
   const [url, setUrl] = useState('');
   const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -184,9 +187,11 @@ export default function SEOAnalyzerPage() {
         setAnalyzedUrl(normalized);
         toast.success('SEO analysis complete');
       }
+      refreshCredits();
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Analysis failed. Please try again.';
       toast.error(msg);
+      refreshCredits();
     } finally {
       setLoading(false);
     }
@@ -284,9 +289,10 @@ export default function SEOAnalyzerPage() {
               disabled={loading}
               className="sm:w-56"
             />
-            <Button type="submit" disabled={loading || !url.trim()} className="gap-2 shrink-0">
+            <Button type="submit" disabled={loading || !url.trim() || isExhausted} className="gap-2 shrink-0">
               {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <SearchCheck className="h-3.5 w-3.5" />}
               {loading ? 'Analyzing...' : 'Analyze'}
+              <CreditCostBadge skillType="seo-analysis" />
             </Button>
           </form>
         </CardContent>

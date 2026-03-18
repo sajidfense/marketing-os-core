@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { PenLine, Loader2, Copy, Download, Sparkles, Check } from 'lucide-react';
 import { api, ApiError } from '@/services/api';
+import { useCredits } from '@/contexts/CreditsContext';
+import { CreditCostBadge } from '@/components/shared/CreditCostBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
@@ -26,6 +28,7 @@ interface SkillResult {
 }
 
 export default function AdCopy() {
+  const { isExhausted, refresh: refreshCredits } = useCredits();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AdCopyOutput | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
@@ -64,9 +67,11 @@ export default function AdCopy() {
           toast.success('Ad copy generated');
         }
       }
+      refreshCredits();
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Generation failed';
       toast.error(msg);
+      refreshCredits();
     } finally {
       setLoading(false);
     }
@@ -143,9 +148,10 @@ export default function AdCopy() {
                 <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Tone (optional)</label>
                 <Input value={tone} onChange={(e) => setTone(e.target.value)} placeholder="e.g. professional, urgent, playful" />
               </div>
-              <Button type="submit" className="w-full gap-2" disabled={loading || !product.trim() || !audience.trim()}>
+              <Button type="submit" className="w-full gap-2" disabled={loading || !product.trim() || !audience.trim() || isExhausted}>
                 {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                 {loading ? 'Generating...' : 'Generate Ad Copy'}
+                <CreditCostBadge skillType="ad-copy" />
               </Button>
             </form>
           </CardContent>

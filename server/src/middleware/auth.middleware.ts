@@ -1,31 +1,21 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import { createClient } from '@supabase/supabase-js';
 import { env } from '../config/env';
 
 /**
- * JWT payload shape emitted by Supabase Auth.
- * Only the fields we actually inspect are listed here.
+ * Per-request Supabase client using the anon key.
+ * We pass the user's Bearer token to getUser() for validation —
+ * Supabase verifies the JWT server-side and returns the user.
  */
-interface SupabaseJwtPayload {
-  /** User UUID */
-  sub: string;
-  /** Audience */
-  aud: string;
-  /** Issued-at (epoch seconds) */
-  iat: number;
-  /** Expiry (epoch seconds) */
-  exp: number;
-  /** User's email (optional) */
-  email?: string;
-  /** Role claim set by Supabase */
-  role?: string;
-}
+const supabaseAuth = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
+  auth: { persistSession: false },
+});
 
 /**
- * Verifies the Bearer JWT using the Supabase JWT secret directly
- * (no network call to supabase.auth.getUser).
+ * Validates the Bearer JWT by calling supabase.auth.getUser(token).
+ * This is the recommended approach — no manual jwt.verify, no secret needed.
  *
- * On success, sets `req.userId` to the `sub` claim.
+ * On success, sets `req.userId` to the authenticated user's ID.
  */
 export async function authMiddleware(
   req: Request,
@@ -47,30 +37,17 @@ export async function authMiddleware(
   }
 
   try {
-    const decoded = jwt.verify(token, env.SUPABASE_JWT_SECRET, {
-      algorithms: ['HS256'],
-    }) as SupabaseJwtPayload;
+    const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
 
-    if (!decoded.sub) {
-      res.status(401).json({ error: 'Token missing subject claim' });
+    if (error || !user) {
+      res.status(401).json({ error: 'Invalid or expired token' });
       return;
     }
 
-    req.userId = decoded.sub;
+    req.userId = user.id;
     next();
   } catch (err) {
-    if (err instanceof jwt.TokenExpiredError) {
-      res.status(401).json({ error: 'Token has expired' });
-      return;
-    }
-
-    if (err instanceof jwt.JsonWebTokenError) {
-      res.status(401).json({ error: 'Invalid token' });
-      return;
-    }
-
-    // Unexpected verification error
-    console.error('[auth] Token verification failed:', err);
+    console.error('[auth] Token validation failed:', err);
     res.status(401).json({ error: 'Authentication failed' });
   }
 }

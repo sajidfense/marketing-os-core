@@ -6,9 +6,17 @@ import { supabase } from '../lib/supabase';
 import { env } from '../config/env';
 import { authMiddleware } from '../middleware/auth.middleware';
 import { organizationMiddleware } from '../middleware/organization.middleware';
+import { getOrCreateUsage, addPurchasedCredits } from '../services/credits.service';
+import { CREDIT_PACKS, CREDIT_COSTS } from '../config/credits';
 
 const checkoutSchema = z.object({
   priceId: z.string().min(1),
+  successUrl: z.string().url(),
+  cancelUrl: z.string().url(),
+});
+
+const buyCreditsSchema = z.object({
+  packId: z.string().min(1),
   successUrl: z.string().url(),
   cancelUrl: z.string().url(),
 });
@@ -68,6 +76,116 @@ billingRouter.post(
   },
 );
 
+// ── Get credit usage (authenticated) ────────────────────────────
+billingRouter.get(
+  '/credits',
+  authMiddleware,
+  organizationMiddleware,
+  async (req: Request, res: Response) => {
+    try {
+      const usage = await getOrCreateUsage(req.organizationId);
+      const resetDate = new Date(usage.reset_date);
+      const now = new Date();
+      const daysUntilReset = Math.max(0, Math.ceil((resetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+      const percent = usage.credits_limit > 0
+        ? Math.min(100, Math.round((usage.credits_used / usage.credits_limit) * 100))
+        : 0;
+
+      res.json({
+        success: true,
+        data: {
+          credits_used: usage.credits_used,
+          credits_limit: usage.credits_limit,
+          reset_date: usage.reset_date,
+          days_until_reset: daysUntilReset,
+          percent,
+          costs: CREDIT_COSTS,
+          packs: CREDIT_PACKS,
+        },
+      });
+    } catch (err) {
+      console.error('[billing] Credits fetch error:', err);
+      res.status(500).json({ error: 'Failed to fetch credit usage' });
+    }
+  },
+);
+
+// ── Buy credits (Stripe one-time checkout) ──────────────────────
+billingRouter.post(
+  '/buy-credits',
+  authMiddleware,
+  organizationMiddleware,
+  async (req: Request, res: Response) => {
+    const { organizationId, userId } = req;
+    const body = buyCreditsSchema.parse(req.body);
+    const { packId, successUrl, cancelUrl } = body;
+
+    const pack = CREDIT_PACKS.find((p) => p.id === packId);
+    if (!pack) {
+      res.status(400).json({ error: 'Invalid credit pack' });
+      return;
+    }
+
+    // Get or create Stripe customer
+    const { data: sub } = await supabase
+      .from('subscriptions')
+      .select('stripe_customer_id')
+      .eq('organization_id', organizationId)
+      .single();
+
+    let customerId = sub?.stripe_customer_id;
+
+    if (!customerId) {
+      const { data: user } = await supabase
+        .from('users')
+        .select('email, full_name')
+        .eq('id', userId)
+        .single();
+
+      const customer = await stripe.customers.create({
+        email: user?.email,
+        name: user?.full_name ?? undefined,
+        metadata: { organization_id: organizationId },
+      });
+
+      customerId = customer.id;
+
+      await supabase.from('subscriptions').upsert(
+        { organization_id: organizationId, stripe_customer_id: customerId, plan: 'free' },
+        { onConflict: 'organization_id' },
+      );
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'payment',
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            unit_amount: pack.priceUsd,
+            product_data: {
+              name: `${pack.credits} AI Credits`,
+              description: `One-time purchase of ${pack.credits} AI credits for Syntra OS`,
+            },
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      metadata: {
+        organization_id: organizationId,
+        credit_pack_id: pack.id,
+        credits: String(pack.credits),
+        type: 'credit_purchase',
+      },
+    });
+
+    res.json({ success: true, data: { url: session.url } });
+  },
+);
+
 // ── Stripe webhook (unauthenticated, raw body) ─────────────────
 billingRouter.post('/webhook/stripe', async (req: Request, res: Response) => {
   const sig = req.headers['stripe-signature'] as string;
@@ -87,6 +205,18 @@ billingRouter.post('/webhook/stripe', async (req: Request, res: Response) => {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session;
       const orgId = session.metadata?.organization_id;
+
+      // ── Credit purchase (one-time payment) ──────────────
+      if (session.metadata?.type === 'credit_purchase' && orgId) {
+        const credits = parseInt(session.metadata.credits ?? '0', 10);
+        if (credits > 0) {
+          await addPurchasedCredits(orgId, credits, session.id);
+          console.log(`[billing] Added ${credits} credits to org ${orgId}`);
+        }
+        break;
+      }
+
+      // ── Subscription checkout ───────────────────────────
       if (orgId && session.subscription) {
         const sub = await stripe.subscriptions.retrieve(session.subscription as string);
         await supabase.from('subscriptions').upsert(

@@ -1,10 +1,10 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Settings2,
   Users,
   CreditCard,
-  BarChart3,
   Loader2,
   Send,
   Shield,
@@ -12,18 +12,35 @@ import {
 } from 'lucide-react';
 import { api, ApiError } from '@/services/api';
 import { useOrg } from '@/contexts/OrgContext';
+import { useCredits } from '@/contexts/CreditsContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { CreditUsageCard } from '@/components/shared/CreditUsage';
 import type { ApiResponse } from '@/types';
 
 export default function Settings() {
   const { currentOrg } = useOrg();
+  const { refresh: refreshCredits } = useCredits();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member');
   const [inviting, setInviting] = useState(false);
+
+  // Handle Stripe credit purchase return
+  useEffect(() => {
+    const creditsParam = searchParams.get('credits');
+    if (creditsParam === 'success') {
+      toast.success('Credits purchased successfully! Your balance will update shortly.');
+      refreshCredits();
+      setSearchParams({}, { replace: true });
+    } else if (creditsParam === 'cancelled') {
+      toast.info('Credit purchase cancelled.');
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams, refreshCredits]);
 
   const handleInvite = async (e: FormEvent) => {
     e.preventDefault();
@@ -195,38 +212,8 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* Usage Stats */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400">
-                <BarChart3 className="h-4 w-4" />
-              </div>
-              <div>
-                <CardTitle className="text-base">Usage</CardTitle>
-                <CardDescription>Your current usage statistics</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {[
-                { label: 'AI Generations', value: '12' },
-                { label: 'Active Campaigns', value: '3' },
-                { label: 'Team Members', value: '1' },
-                { label: 'Storage Used', value: '24 MB' },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">{item.label}</span>
-                  <span className="text-sm font-medium tabular-nums">{item.value}</span>
-                </div>
-              ))}
-            </div>
-            <p className="mt-4 text-xs text-muted-foreground/60">
-              Usage data refreshes periodically.
-            </p>
-          </CardContent>
-        </Card>
+        {/* AI Credits */}
+        <CreditUsageCard />
       </div>
     </div>
   );

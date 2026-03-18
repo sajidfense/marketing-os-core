@@ -95,3 +95,21 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
 }
+
+// ── Credits ─────────────────────────────────────────────────
+export interface CreditPack {
+  id: string;
+  credits: number;
+  priceUsd: number;
+  label: string;
+}
+
+export interface CreditsData {
+  credits_used: number;
+  credits_limit: number;
+  reset_date: string;
+  days_until_reset: number;
+  percent: number;
+  costs: Record<string, number>;
+  packs: CreditPack[];
+}

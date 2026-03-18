@@ -25,6 +25,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrg } from '@/contexts/OrgContext';
 import { cn } from '@/lib/utils';
+import { CreditUsageMini } from '@/components/shared/CreditUsage';
 
 const navSections = [
   {
@@ -155,6 +156,13 @@ export function Sidebar() {
           </div>
         ))}
       </nav>
+
+      {/* Credit usage mini bar */}
+      {!collapsed && (
+        <div className="border-t border-[hsl(var(--sidebar-border))]">
+          <CreditUsageMini />
+        </div>
+      )}
 
       {/* Bottom links */}
       <div className="border-t border-[hsl(var(--sidebar-border))] px-2 pt-2 pb-1 space-y-0.5">

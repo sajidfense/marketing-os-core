@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { FileText, Loader2, Copy, Download, Sparkles, ChevronRight } from 'lucide-react';
 import { api, ApiError } from '@/services/api';
+import { useCredits } from '@/contexts/CreditsContext';
+import { CreditCostBadge } from '@/components/shared/CreditCostBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
@@ -36,6 +38,7 @@ interface SkillResult {
 }
 
 export default function BlogPlanner() {
+  const { isExhausted, refresh: refreshCredits } = useCredits();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<BlogPlanOutput | null>(null);
   const [expandedPost, setExpandedPost] = useState<number | null>(null);
@@ -63,9 +66,11 @@ export default function BlogPlanner() {
         setResult(res.data.output);
         toast.success('Blog plan generated');
       }
+      refreshCredits();
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Generation failed';
       toast.error(msg);
+      refreshCredits();
     } finally {
       setLoading(false);
     }
@@ -148,9 +153,10 @@ export default function BlogPlanner() {
                 <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Goal (optional)</label>
                 <Input value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="e.g. establish thought leadership" />
               </div>
-              <Button type="submit" className="w-full gap-2" disabled={loading || !niche.trim()}>
+              <Button type="submit" className="w-full gap-2" disabled={loading || !niche.trim() || isExhausted}>
                 {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                 {loading ? 'Generating...' : 'Generate Blog Plan'}
+                <CreditCostBadge skillType="blog-planner" />
               </Button>
             </form>
           </CardContent>

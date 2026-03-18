@@ -1,16 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import { createClient } from '@supabase/supabase-js';
 import { env } from '../config/env';
 import { supabase } from '../lib/supabase';
 
-interface SupabaseJwtPayload {
-  sub: string;
-  aud: string;
-  iat: number;
-  exp: number;
-  email?: string;
-  role?: string;
-}
+const supabaseAuth = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
+  auth: { persistSession: false },
+});
 
 /**
  * Middleware that protects admin provisioning routes.
@@ -21,8 +16,8 @@ interface SupabaseJwtPayload {
  *    configured ADMIN_SECRET env var.  Used for server-to-server / CLI calls
  *    where no user session exists.
  *
- * 2. **JWT + super_admin role** — a valid Supabase JWT whose `sub` (user_id)
- *    has a `super_admin` role in *any* organization_users row.
+ * 2. **Supabase getUser + super_admin role** — validates the Bearer token
+ *    via Supabase, then checks if the user has a `super_admin` role.
  */
 export async function adminMiddleware(
   req: Request,
@@ -40,7 +35,7 @@ export async function adminMiddleware(
     return;
   }
 
-  // ── Strategy 2: JWT + super_admin role ───────────────────────────
+  // ── Strategy 2: Supabase getUser + super_admin role ──────────────
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -51,39 +46,29 @@ export async function adminMiddleware(
   const token = authHeader.slice(7);
 
   try {
-    const decoded = jwt.verify(token, env.SUPABASE_JWT_SECRET, {
-      algorithms: ['HS256'],
-    }) as SupabaseJwtPayload;
+    const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
 
-    if (!decoded.sub) {
-      res.status(401).json({ error: 'Token missing subject claim' });
+    if (error || !user) {
+      res.status(401).json({ error: 'Invalid or expired token' });
       return;
     }
 
     // Check if user has super_admin role in any org
-    const { data, error } = await supabase
+    const { data, error: roleError } = await supabase
       .from('organization_users')
       .select('role')
-      .eq('user_id', decoded.sub)
+      .eq('user_id', user.id)
       .eq('role', 'super_admin')
       .limit(1);
 
-    if (error || !data || data.length === 0) {
+    if (roleError || !data || data.length === 0) {
       res.status(403).json({ error: 'Insufficient privileges — super_admin role required' });
       return;
     }
 
-    req.userId = decoded.sub;
+    req.userId = user.id;
     next();
   } catch (err) {
-    if (err instanceof jwt.TokenExpiredError) {
-      res.status(401).json({ error: 'Token has expired' });
-      return;
-    }
-    if (err instanceof jwt.JsonWebTokenError) {
-      res.status(401).json({ error: 'Invalid token' });
-      return;
-    }
     console.error('[admin-middleware] Verification failed:', err);
     res.status(401).json({ error: 'Admin authentication failed' });
   }

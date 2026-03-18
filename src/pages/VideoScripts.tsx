@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Video, Loader2, Copy, Download, Sparkles } from 'lucide-react';
 import { api, ApiError } from '@/services/api';
+import { useCredits } from '@/contexts/CreditsContext';
+import { CreditCostBadge } from '@/components/shared/CreditCostBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
@@ -28,6 +30,7 @@ interface SkillResult {
 }
 
 export default function VideoScripts() {
+  const { isExhausted, refresh: refreshCredits } = useCredits();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<VideoScriptOutput | null>(null);
 
@@ -53,9 +56,11 @@ export default function VideoScripts() {
         setResult(res.data.output);
         toast.success('Script generated');
       }
+      refreshCredits();
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Generation failed';
       toast.error(msg);
+      refreshCredits();
     } finally {
       setLoading(false);
     }
@@ -137,9 +142,10 @@ export default function VideoScripts() {
                   <option value="60-90 seconds">60-90 seconds</option>
                 </select>
               </div>
-              <Button type="submit" className="w-full gap-2" disabled={loading || !topic.trim()}>
+              <Button type="submit" className="w-full gap-2" disabled={loading || !topic.trim() || isExhausted}>
                 {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                 {loading ? 'Generating...' : 'Generate Script'}
+                <CreditCostBadge skillType="video-script" />
               </Button>
             </form>
           </CardContent>
