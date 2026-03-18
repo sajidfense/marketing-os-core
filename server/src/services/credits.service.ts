@@ -23,17 +23,25 @@ export async function getOrCreateUsage(orgId: string): Promise<UsageRecord> {
     return await maybeResetCredits(data as UsageRecord);
   }
 
+  console.log(`[credits] No usage record for org ${orgId}, provisioning...`);
+
   // Provision new usage row — look up org plan for limit
-  const { data: org } = await supabase
+  const { data: org, error: orgErr } = await supabase
     .from('organizations')
     .select('plan')
     .eq('id', orgId)
     .single();
 
+  if (orgErr) {
+    console.error(`[credits] Failed to look up org plan for ${orgId}:`, orgErr.message);
+  }
+
   const plan = org?.plan ?? 'free';
   const limit = PLAN_CREDIT_LIMITS[plan] ?? DEFAULT_PLAN_LIMIT;
   const resetDate = new Date();
   resetDate.setDate(resetDate.getDate() + 30);
+
+  console.log(`[credits] Provisioning org ${orgId}: plan=${plan}, limit=${limit}`);
 
   const { data: created, error: insertErr } = await supabase
     .from('organization_usage')
@@ -50,9 +58,18 @@ export async function getOrCreateUsage(orgId: string): Promise<UsageRecord> {
     .single();
 
   if (insertErr || !created) {
-    throw new Error('Failed to provision credit usage record');
+    console.error(`[credits] Failed to provision usage for org ${orgId}:`, insertErr?.message);
+    // Return a safe default rather than throwing — allows the request to proceed
+    return {
+      id: '',
+      organization_id: orgId,
+      credits_used: 0,
+      credits_limit: limit,
+      reset_date: resetDate.toISOString(),
+    };
   }
 
+  console.log(`[credits] Provisioned usage for org ${orgId}: limit=${created.credits_limit}`);
   return created as UsageRecord;
 }
 
@@ -67,6 +84,8 @@ async function maybeResetCredits(usage: UsageRecord): Promise<UsageRecord> {
   const newResetDate = new Date();
   newResetDate.setDate(newResetDate.getDate() + 30);
 
+  console.log(`[credits] Resetting credits for org ${usage.organization_id} (was ${usage.credits_used}/${usage.credits_limit})`);
+
   const { data, error } = await supabase
     .from('organization_usage')
     .update({
@@ -79,15 +98,19 @@ async function maybeResetCredits(usage: UsageRecord): Promise<UsageRecord> {
     .single();
 
   if (error || !data) {
-    throw new Error('Failed to reset credits');
+    console.error(`[credits] Reset failed for org ${usage.organization_id}:`, error?.message);
+    // Return with credits_used zeroed so the user isn't stuck
+    return { ...usage, credits_used: 0, reset_date: newResetDate.toISOString() };
   }
 
-  // Log the reset transaction
+  // Log the reset transaction (non-critical — don't throw on failure)
   await supabase.from('credit_transactions').insert({
     organization_id: usage.organization_id,
     credits: 0,
     type: 'reset',
     description: `Monthly credit reset. Previous usage: ${usage.credits_used}/${usage.credits_limit}`,
+  }).then(({ error: txErr }) => {
+    if (txErr) console.error(`[credits] Failed to log reset transaction:`, txErr.message);
   });
 
   return data as UsageRecord;
@@ -101,6 +124,8 @@ export async function checkCredits(
   const usage = await getOrCreateUsage(orgId);
   const cost = getCreditCost(skillType);
 
+  console.log(`[credits] Check: org=${orgId} skill=${skillType} cost=${cost} used=${usage.credits_used}/${usage.credits_limit}`);
+
   // Check if comped org (unlimited)
   const { data: org } = await supabase
     .from('organizations')
@@ -109,10 +134,12 @@ export async function checkCredits(
     .single();
 
   if (org?.comped) {
+    console.log(`[credits] Org ${orgId} is comped — allowing`);
     return { allowed: true, usage, cost };
   }
 
   const allowed = usage.credits_used + cost <= usage.credits_limit;
+  console.log(`[credits] Result: allowed=${allowed} (${usage.credits_used} + ${cost} ${allowed ? '<=' : '>'} ${usage.credits_limit})`);
   return { allowed, usage, cost };
 }
 
@@ -123,11 +150,10 @@ export async function consumeCredits(
   userId: string,
 ): Promise<UsageRecord> {
   const cost = getCreditCost(skillType);
-
-  // Atomic increment using RPC-style update
-  // First get current value to ensure we don't go negative
   const usage = await getOrCreateUsage(orgId);
   const newUsed = Math.max(0, usage.credits_used + cost);
+
+  console.log(`[credits] Consuming: org=${orgId} skill=${skillType} cost=${cost} ${usage.credits_used} -> ${newUsed}`);
 
   const { data, error } = await supabase
     .from('organization_usage')
@@ -142,6 +168,7 @@ export async function consumeCredits(
 
   if (error || !data) {
     // Retry once on concurrency conflict
+    console.log(`[credits] Concurrency conflict for org ${orgId}, retrying...`);
     const retryUsage = await getOrCreateUsage(orgId);
     const retryUsed = Math.max(0, retryUsage.credits_used + cost);
 
@@ -156,15 +183,15 @@ export async function consumeCredits(
       .single();
 
     if (retryErr || !retryData) {
-      throw new Error('Failed to consume credits (concurrency conflict)');
+      console.error(`[credits] Consume failed after retry for org ${orgId}:`, retryErr?.message);
+      // Return current usage rather than throwing — the AI call can still proceed
+      return { ...retryUsage, credits_used: retryUsed };
     }
 
-    // Log transaction
     await logConsumeTransaction(orgId, cost, skillType, userId);
     return retryData as UsageRecord;
   }
 
-  // Log transaction
   await logConsumeTransaction(orgId, cost, skillType, userId);
   return data as UsageRecord;
 }
@@ -180,6 +207,8 @@ async function logConsumeTransaction(
     credits: -cost,
     type: 'consume',
     description: `AI skill: ${skillType} (user: ${userId})`,
+  }).then(({ error }) => {
+    if (error) console.error(`[credits] Failed to log consume transaction:`, error.message);
   });
 }
 
@@ -203,6 +232,7 @@ export async function addPurchasedCredits(
     .single();
 
   if (error || !data) {
+    console.error(`[credits] Failed to add purchased credits for org ${orgId}:`, error?.message);
     throw new Error('Failed to add purchased credits');
   }
 
@@ -213,6 +243,8 @@ export async function addPurchasedCredits(
     type: 'purchase',
     description: `Purchased ${credits} credits`,
     stripe_session_id: stripeSessionId ?? null,
+  }).then(({ error: txErr }) => {
+    if (txErr) console.error(`[credits] Failed to log purchase transaction:`, txErr.message);
   });
 
   return data as UsageRecord;
