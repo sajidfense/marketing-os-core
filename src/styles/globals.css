@@ -1,0 +1,203 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Syntra OS Landing Tokens ───────────────────────────────────────── */
+:root {
+  --synt-bg: #06060E;
+  --synt-surface: rgba(255, 255, 255, 0.03);
+  --synt-surface-hover: rgba(255, 255, 255, 0.055);
+  --synt-border: rgba(255, 255, 255, 0.08);
+  --synt-border-hover: rgba(99, 102, 241, 0.5);
+  --synt-indigo: #6366F1;
+  --synt-cyan: #22D3EE;
+  --synt-amber: #F59E0B;
+  --synt-green: #34D399;
+  --synt-text: #F8FAFC;
+  --synt-muted: #64748B;
+  --synt-subtle: #1E293B;
+}
+
+/* ── Landing-specific utilities ─────────────────────────────────────── */
+.font-display {
+  font-family: 'Syne', sans-serif;
+}
+
+.font-body {
+  font-family: 'Outfit', sans-serif;
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, #fff 0%, rgba(99,102,241,0.9) 50%, #22D3EE 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-subtle {
+  background: linear-gradient(90deg, #F8FAFC 0%, #94A3B8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glass-card {
+  background: var(--synt-surface);
+  border: 1px solid var(--synt-border);
+  backdrop-filter: blur(12px);
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.glass-card:hover {
+  background: var(--synt-surface-hover);
+  border-color: var(--synt-border-hover);
+  box-shadow: 0 0 0 1px rgba(99,102,241,0.3), 0 20px 60px rgba(99,102,241,0.08);
+}
+
+.glow-indigo {
+  box-shadow: 0 0 40px rgba(99,102,241,0.25);
+}
+
+.glow-cyan {
+  box-shadow: 0 0 40px rgba(34,211,238,0.25);
+}
+
+/* Grid background pattern */
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+  background-size: 72px 72px;
+}
+
+/* Float animation for stat cards */
+@keyframes float-a {
+  0%, 100% { transform: translateY(0px) rotate(-1deg); }
+  50%       { transform: translateY(-12px) rotate(1deg); }
+}
+@keyframes float-b {
+  0%, 100% { transform: translateY(-8px) rotate(1.5deg); }
+  50%       { transform: translateY(4px) rotate(-1.5deg); }
+}
+@keyframes float-c {
+  0%, 100% { transform: translateY(4px) rotate(0.5deg); }
+  50%       { transform: translateY(-10px) rotate(-0.5deg); }
+}
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 0.7; }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+.animate-float-a { animation: float-a 6s ease-in-out infinite; }
+.animate-float-b { animation: float-b 7s ease-in-out infinite; }
+.animate-float-c { animation: float-c 5s ease-in-out infinite; }
+.animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
+.animate-blink { animation: blink 1s step-end infinite; }
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --primary: 245 58% 51%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 245 58% 51%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 240 10% 4%;
+    --foreground: 210 40% 98%;
+    --card: 240 6% 6.5%;
+    --card-foreground: 210 40% 98%;
+    --primary: 245 58% 51%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 240 5% 12%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 240 5% 12%;
+    --muted-foreground: 215 15% 55%;
+    --accent: 240 5% 15%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 50%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 240 4% 14%;
+    --input: 240 4% 14%;
+    --ring: 245 58% 51%;
+
+    --sidebar: 240 10% 5%;
+    --sidebar-foreground: 215 15% 55%;
+    --sidebar-border: 240 4% 11%;
+    --sidebar-active: 245 58% 51%;
+    --sidebar-hover: 240 5% 10%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* ── Scrollbar styling ────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.3);
+}
+
+/* ── Skeleton loading animation ───────────────────────────────────── */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.05; }
+  50%      { opacity: 0.12; }
+}
+.skeleton {
+  animation: skeleton-pulse 2s ease-in-out infinite;
+  background: hsl(var(--foreground));
+  border-radius: var(--radius);
+}
+
+/* ── Chart tooltip ────────────────────────────────────────────────── */
+.chart-tooltip {
+  background: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: calc(var(--radius) - 2px) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+  padding: 8px 12px !important;
+  color: hsl(var(--foreground)) !important;
+  font-size: 13px !important;
+}

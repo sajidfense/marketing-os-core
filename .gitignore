@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+server/node_modules/
+
+# Build outputs
+dist/
+server/dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+server/.env
+server/.env.local
+
+# MCP config (contains secrets)
+.mcp.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
+
+# Misc
+.cache/
+tmp/
+.vercel

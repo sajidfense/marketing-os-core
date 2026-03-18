@@ -1,0 +1,271 @@
+import { useState } from 'react';
+import {
+  Users,
+  Plus,
+  Search,
+  Download,
+  Mail,
+  Building2,
+  Globe,
+  Tag,
+  MoreHorizontal,
+  ArrowUpDown,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { PageHeader } from '@/components/shared/PageHeader';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { exportToCSV } from '@/lib/export';
+import { cn } from '@/lib/utils';
+
+type LeadStage = 'new' | 'contacted' | 'qualified' | 'proposal' | 'won' | 'lost';
+
+interface Lead {
+  id: string;
+  name: string;
+  email: string;
+  company: string;
+  website: string;
+  stage: LeadStage;
+  value: number;
+  tags: string[];
+  lastActivity: string;
+}
+
+const stageConfig: Record<LeadStage, { label: string; color: string; variant: 'secondary' | 'default' | 'success' | 'warning' | 'destructive' | 'outline' }> = {
+  new: { label: 'New', color: '#3B82F6', variant: 'default' },
+  contacted: { label: 'Contacted', color: '#8B5CF6', variant: 'default' },
+  qualified: { label: 'Qualified', color: '#F59E0B', variant: 'warning' },
+  proposal: { label: 'Proposal', color: '#6366F1', variant: 'default' },
+  won: { label: 'Won', color: '#22C55E', variant: 'success' },
+  lost: { label: 'Lost', color: '#64748B', variant: 'secondary' },
+};
+
+const mockLeads: Lead[] = [
+  { id: '1', name: 'Sarah Chen', email: 'sarah@techflow.io', company: 'TechFlow', website: 'techflow.io', stage: 'qualified', value: 12000, tags: ['enterprise', 'saas'], lastActivity: '2 hours ago' },
+  { id: '2', name: 'Marcus Johnson', email: 'marcus@retailmax.com', company: 'RetailMax', website: 'retailmax.com', stage: 'proposal', value: 24000, tags: ['ecommerce'], lastActivity: '1 day ago' },
+  { id: '3', name: 'Emily Wong', email: 'emily@greenleaf.co', company: 'GreenLeaf', website: 'greenleaf.co', stage: 'new', value: 8000, tags: ['startup'], lastActivity: '3 hours ago' },
+  { id: '4', name: 'David Park', email: 'david@nomadlabs.dev', company: 'Nomad Labs', website: 'nomadlabs.dev', stage: 'contacted', value: 15000, tags: ['agency', 'tech'], lastActivity: '5 hours ago' },
+  { id: '5', name: 'Lisa Martinez', email: 'lisa@suncoast.com', company: 'SunCoast Hotels', website: 'suncoast.com', stage: 'won', value: 36000, tags: ['hospitality', 'enterprise'], lastActivity: '1 week ago' },
+  { id: '6', name: 'James Wilson', email: 'james@craftbrew.co', company: 'CraftBrew Co', website: 'craftbrew.co', stage: 'new', value: 5000, tags: ['food-bev'], lastActivity: '1 hour ago' },
+  { id: '7', name: 'Anna Schmidt', email: 'anna@designhaus.de', company: 'DesignHaus', website: 'designhaus.de', stage: 'lost', value: 18000, tags: ['agency'], lastActivity: '2 weeks ago' },
+];
+
+function formatCurrency(n: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+}
+
+export default function Leads() {
+  const [search, setSearch] = useState('');
+  const [stageFilter, setStageFilter] = useState<LeadStage | 'all'>('all');
+  const [view, setView] = useState<'table' | 'pipeline'>('table');
+
+  const filtered = mockLeads
+    .filter((l) => stageFilter === 'all' || l.stage === stageFilter)
+    .filter((l) =>
+      search === '' ||
+      l.name.toLowerCase().includes(search.toLowerCase()) ||
+      l.company.toLowerCase().includes(search.toLowerCase()) ||
+      l.email.toLowerCase().includes(search.toLowerCase())
+    );
+
+  const pipelineStages: LeadStage[] = ['new', 'contacted', 'qualified', 'proposal', 'won'];
+
+  function handleExport() {
+    exportToCSV(
+      filtered.map((l) => ({ ...l, tags: l.tags.join(', ') })),
+      'leads',
+      [
+        { key: 'name', label: 'Name' },
+        { key: 'email', label: 'Email' },
+        { key: 'company', label: 'Company' },
+        { key: 'stage', label: 'Stage' },
+        { key: 'value', label: 'Value' },
+        { key: 'tags', label: 'Tags' },
+      ],
+    );
+    toast.success('Leads exported');
+  }
+
+  const totalValue = filtered.reduce((s, l) => s + l.value, 0);
+
+  return (
+    <div className="space-y-8">
+      <PageHeader
+        title="Leads"
+        description={`${filtered.length} leads \u00b7 ${formatCurrency(totalValue)} pipeline value`}
+        actions={
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleExport} className="gap-2">
+              <Download className="h-3 w-3" />
+              Export
+            </Button>
+            <Button size="sm" className="gap-2">
+              <Plus className="h-3.5 w-3.5" />
+              Add Lead
+            </Button>
+          </div>
+        }
+      />
+
+      {/* Toolbar */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search leads..."
+            className="pl-9"
+          />
+        </div>
+        <div className="flex gap-2">
+          <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
+            {(['table', 'pipeline'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={cn(
+                  'rounded-md px-2.5 py-1 text-xs font-medium transition-colors capitalize',
+                  view === v ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+          <select
+            value={stageFilter}
+            onChange={(e) => setStageFilter(e.target.value as LeadStage | 'all')}
+            className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <option value="all">All Stages</option>
+            {Object.entries(stageConfig).map(([key, cfg]) => (
+              <option key={key} value={key}>{cfg.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Pipeline View */}
+      {view === 'pipeline' && (
+        <div className="flex gap-3 overflow-x-auto pb-4">
+          {pipelineStages.map((stage) => {
+            const cfg = stageConfig[stage];
+            const stageLeads = mockLeads.filter((l) => l.stage === stage);
+            return (
+              <div key={stage} className="min-w-[240px] flex-1">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full" style={{ backgroundColor: cfg.color }} />
+                    <span className="text-xs font-semibold">{cfg.label}</span>
+                  </div>
+                  <Badge variant="secondary" className="text-[9px]">{stageLeads.length}</Badge>
+                </div>
+                <div className="space-y-2">
+                  {stageLeads.map((lead) => (
+                    <Card key={lead.id} className="p-3 cursor-pointer hover:border-primary/20 transition-all duration-150">
+                      <p className="text-xs font-semibold truncate">{lead.name}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{lead.company}</p>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-xs font-medium tabular-nums" style={{ color: cfg.color }}>
+                          {formatCurrency(lead.value)}
+                        </span>
+                        <span className="text-[9px] text-muted-foreground">{lead.lastActivity}</span>
+                      </div>
+                      {lead.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {lead.tags.map((tag) => (
+                            <span key={tag} className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </Card>
+                  ))}
+                  {stageLeads.length === 0 && (
+                    <div className="flex items-center justify-center rounded-lg border border-dashed border-border/50 py-8">
+                      <p className="text-[10px] text-muted-foreground">No leads</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Table View */}
+      {view === 'table' && (
+        <Card>
+          <CardContent className="p-0">
+            {filtered.length === 0 ? (
+              <div className="p-8">
+                <EmptyState
+                  icon={Users}
+                  title="No leads found"
+                  description="Add your first lead or adjust your search filters."
+                  actionLabel="Add Lead"
+                  onAction={() => {}}
+                />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Contact</th>
+                      <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Company</th>
+                      <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Stage</th>
+                      <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Value</th>
+                      <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tags</th>
+                      <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Activity</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((lead) => {
+                      const cfg = stageConfig[lead.stage];
+                      return (
+                        <tr key={lead.id} className="border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors cursor-pointer">
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-sm">{lead.name}</p>
+                            <p className="text-xs text-muted-foreground">{lead.email}</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1.5">
+                              <Building2 className="h-3 w-3 text-muted-foreground" />
+                              <span className="text-sm">{lead.company}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge variant={cfg.variant as 'default'} className="text-[10px]">{cfg.label}</Badge>
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums font-medium">{formatCurrency(lead.value)}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap gap-1">
+                              {lead.tags.map((tag) => (
+                                <span key={tag} className="inline-flex items-center gap-0.5 rounded-md bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground">
+                                  <Tag className="h-2 w-2" />
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right text-xs text-muted-foreground">{lead.lastActivity}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
