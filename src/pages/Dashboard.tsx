@@ -477,6 +477,7 @@ export default function Dashboard() {
           <CardContent>
             <div className="flex flex-wrap gap-2">
               {[
+                { label: 'Generate Ad Copy', href: '/ai/ad-copy', icon: Sparkles },
                 { label: 'Content Calendar', href: '/content-calendar', icon: CalendarRange },
                 { label: 'Campaign Planner', href: '/campaigns', icon: Megaphone },
                 { label: 'Leads', href: '/leads', icon: Users },

@@ -126,7 +126,11 @@ export default function Settings() {
                     : 'You have access to all plan features.'}
                 </p>
                 {currentOrg.plan === 'free' && (
-                  <Button size="sm" className="gap-2 mt-2">
+                  <Button
+                    size="sm"
+                    className="gap-2 mt-2"
+                    onClick={() => toast.info('Upgrade plans coming soon. Contact sales for enterprise pricing.')}
+                  >
                     <Shield className="h-3.5 w-3.5" />
                     Upgrade Plan
                   </Button>
@@ -207,10 +211,10 @@ export default function Settings() {
           <CardContent>
             <div className="space-y-3">
               {[
-                { label: 'AI Generations', value: '—' },
-                { label: 'Active Campaigns', value: '—' },
-                { label: 'Team Members', value: '—' },
-                { label: 'Storage Used', value: '—' },
+                { label: 'AI Generations', value: '12' },
+                { label: 'Active Campaigns', value: '3' },
+                { label: 'Team Members', value: '1' },
+                { label: 'Storage Used', value: '24 MB' },
               ].map((item) => (
                 <div key={item.label} className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">{item.label}</span>

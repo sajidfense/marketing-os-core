@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import {
   SearchCheck,
   Plus,
@@ -11,10 +11,13 @@ import {
   ChevronDown,
   ExternalLink,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 type TaskStatus = 'done' | 'in-progress' | 'todo';
@@ -56,7 +59,7 @@ const categoryColors: Record<string, string> = {
   'off-page': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
 };
 
-const mockTasks: SEOTask[] = [
+const initialTasks: SEOTask[] = [
   { id: '1', title: 'Fix crawl errors in Google Search Console', category: 'technical', priority: 'high', status: 'done', impact: 'Improves indexation' },
   { id: '2', title: 'Add structured data (FAQ, Product)', category: 'technical', priority: 'high', status: 'in-progress', impact: 'Rich snippet eligibility' },
   { id: '3', title: 'Optimize title tags for top 10 pages', category: 'on-page', priority: 'high', status: 'in-progress', impact: '+15% CTR potential' },
@@ -82,15 +85,51 @@ const difficultyVariant: Record<string, 'success' | 'warning' | 'destructive'> =
 };
 
 export default function SEOPlan() {
+  const [tasks, setTasks] = useState<SEOTask[]>(initialTasks);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [addTitle, setAddTitle] = useState('');
+  const [addCategory, setAddCategory] = useState<SEOTask['category']>('technical');
+  const [addPriority, setAddPriority] = useState<SEOTask['priority']>('medium');
+  const [addImpact, setAddImpact] = useState('');
 
   const filteredTasks = categoryFilter === 'all'
-    ? mockTasks
-    : mockTasks.filter((t) => t.category === categoryFilter);
+    ? tasks
+    : tasks.filter((t) => t.category === categoryFilter);
 
-  const done = mockTasks.filter((t) => t.status === 'done').length;
-  const progress = Math.round((done / mockTasks.length) * 100);
+  const done = tasks.filter((t) => t.status === 'done').length;
+  const progress = Math.round((done / tasks.length) * 100);
+
+  function handleAdd(e: FormEvent) {
+    e.preventDefault();
+    const newTask: SEOTask = {
+      id: String(Date.now()),
+      title: addTitle,
+      category: addCategory,
+      priority: addPriority,
+      status: 'todo',
+      impact: addImpact || 'To be assessed',
+    };
+    setTasks((prev) => [...prev, newTask]);
+    setShowAdd(false);
+    setAddTitle('');
+    setAddImpact('');
+    setAddCategory('technical');
+    setAddPriority('medium');
+    toast.success('SEO task added');
+  }
+
+  function cycleStatus(id: string) {
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.id !== id) return t;
+        const next: TaskStatus = t.status === 'todo' ? 'in-progress' : t.status === 'in-progress' ? 'done' : 'todo';
+        return { ...t, status: next };
+      })
+    );
+    toast.success('Status updated');
+  }
 
   return (
     <div className="space-y-8">
@@ -98,12 +137,64 @@ export default function SEOPlan() {
         title="SEO Plan"
         description="Strategic SEO roadmap and keyword tracking"
         actions={
-          <Button size="sm" className="gap-2">
+          <Button size="sm" className="gap-2" onClick={() => setShowAdd(true)}>
             <Plus className="h-3.5 w-3.5" />
             Add Task
           </Button>
         }
       />
+
+      {/* Add Task Dialog */}
+      <Dialog open={showAdd} onClose={() => setShowAdd(false)}>
+        <DialogHeader>
+          <DialogTitle>Add SEO Task</DialogTitle>
+          <DialogDescription>Add a new action item to your SEO plan.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleAdd} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Task Title *</label>
+            <Input value={addTitle} onChange={(e) => setAddTitle(e.target.value)} placeholder="e.g. Optimize meta descriptions for product pages" required />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Category</label>
+              <select
+                value={addCategory}
+                onChange={(e) => setAddCategory(e.target.value as SEOTask['category'])}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="technical">Technical</option>
+                <option value="on-page">On-Page</option>
+                <option value="content">Content</option>
+                <option value="off-page">Off-Page</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Priority</label>
+              <select
+                value={addPriority}
+                onChange={(e) => setAddPriority(e.target.value as SEOTask['priority'])}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Expected Impact</label>
+            <Input value={addImpact} onChange={(e) => setAddImpact(e.target.value)} placeholder="e.g. +20% organic traffic" />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setShowAdd(false)}>Cancel</Button>
+            <Button type="submit" size="sm" className="gap-2" disabled={!addTitle.trim()}>
+              <Plus className="h-3.5 w-3.5" />
+              Add Task
+            </Button>
+          </div>
+        </form>
+      </Dialog>
 
       {/* Overview cards */}
       <div className="grid gap-4 sm:grid-cols-4">
@@ -126,7 +217,7 @@ export default function SEOPlan() {
         </Card>
         <Card className="p-4">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Tasks Remaining</p>
-          <p className="text-xl font-bold tabular-nums mt-0.5">{mockTasks.length - done}</p>
+          <p className="text-xl font-bold tabular-nums mt-0.5">{tasks.length - done}</p>
         </Card>
       </div>
 
@@ -210,7 +301,16 @@ export default function SEOPlan() {
               >
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3">
-                    <StatusIcon className="h-4 w-4 shrink-0" style={{ color: sc.variant === 'success' ? '#22C55E' : sc.variant === 'default' ? '#6366F1' : '#64748B' }} />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        cycleStatus(task.id);
+                      }}
+                      className="shrink-0"
+                      title="Click to change status"
+                    >
+                      <StatusIcon className="h-4 w-4" style={{ color: sc.variant === 'success' ? '#22C55E' : sc.variant === 'default' ? '#6366F1' : '#64748B' }} />
+                    </button>
                     <div className="flex-1 min-w-0">
                       <p className={cn('text-sm font-medium', task.status === 'done' && 'line-through text-muted-foreground')}>{task.title}</p>
                     </div>

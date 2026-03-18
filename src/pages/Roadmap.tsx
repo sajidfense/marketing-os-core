@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import {
   Map,
   Plus,
@@ -9,11 +9,16 @@ import {
   ChevronDown,
   Link2,
   Flag,
+  Loader2,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 type MilestoneStatus = 'completed' | 'in-progress' | 'planned' | 'at-risk';
@@ -35,7 +40,7 @@ const statusConfig: Record<MilestoneStatus, { label: string; icon: typeof CheckC
   'at-risk': { label: 'At Risk', icon: AlertCircle, color: '#F59E0B', badge: 'warning' },
 };
 
-const mockMilestones: Milestone[] = [
+const initialMilestones: Milestone[] = [
   {
     id: '1',
     title: 'Brand Identity Finalized',
@@ -116,15 +121,48 @@ function TimelineConnector({ active }: { active: boolean }) {
 }
 
 export default function Roadmap() {
+  const [milestones, setMilestones] = useState<Milestone[]>(initialMilestones);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<MilestoneStatus | 'all'>('all');
+  const [showAdd, setShowAdd] = useState(false);
+  const [addTitle, setAddTitle] = useState('');
+  const [addDesc, setAddDesc] = useState('');
+  const [addDate, setAddDate] = useState('');
+  const [addStatus, setAddStatus] = useState<MilestoneStatus>('planned');
 
   const filtered = filter === 'all'
-    ? mockMilestones
-    : mockMilestones.filter((m) => m.status === filter);
+    ? milestones
+    : milestones.filter((m) => m.status === filter);
 
-  const completedCount = mockMilestones.filter((m) => m.status === 'completed').length;
-  const progress = Math.round((completedCount / mockMilestones.length) * 100);
+  const completedCount = milestones.filter((m) => m.status === 'completed').length;
+  const progress = Math.round((completedCount / milestones.length) * 100);
+
+  function handleAdd(e: FormEvent) {
+    e.preventDefault();
+    const newMilestone: Milestone = {
+      id: String(Date.now()),
+      title: addTitle,
+      description: addDesc,
+      status: addStatus,
+      date: addDate,
+      linkedItems: [],
+      dependencies: [],
+    };
+    setMilestones((prev) => [...prev, newMilestone]);
+    setShowAdd(false);
+    setAddTitle('');
+    setAddDesc('');
+    setAddDate('');
+    setAddStatus('planned');
+    toast.success('Milestone added');
+  }
+
+  function handleStatusChange(id: string, newStatus: MilestoneStatus) {
+    setMilestones((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, status: newStatus } : m))
+    );
+    toast.success('Status updated');
+  }
 
   return (
     <div className="space-y-8">
@@ -132,19 +170,62 @@ export default function Roadmap() {
         title="Roadmap"
         description="Marketing milestones and strategic timeline"
         actions={
-          <Button size="sm" className="gap-2">
+          <Button size="sm" className="gap-2" onClick={() => setShowAdd(true)}>
             <Plus className="h-3.5 w-3.5" />
             Add Milestone
           </Button>
         }
       />
 
+      {/* Add Milestone Dialog */}
+      <Dialog open={showAdd} onClose={() => setShowAdd(false)}>
+        <DialogHeader>
+          <DialogTitle>Add Milestone</DialogTitle>
+          <DialogDescription>Add a new milestone to your marketing roadmap.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleAdd} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Title *</label>
+            <Input value={addTitle} onChange={(e) => setAddTitle(e.target.value)} placeholder="e.g. Q2 Campaign Launch" required />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Description</label>
+            <Textarea value={addDesc} onChange={(e) => setAddDesc(e.target.value)} placeholder="Describe this milestone..." rows={3} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Date *</label>
+              <Input value={addDate} onChange={(e) => setAddDate(e.target.value)} placeholder="e.g. Apr 30" required />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Status</label>
+              <select
+                value={addStatus}
+                onChange={(e) => setAddStatus(e.target.value as MilestoneStatus)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                {Object.entries(statusConfig).map(([key, cfg]) => (
+                  <option key={key} value={key}>{cfg.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setShowAdd(false)}>Cancel</Button>
+            <Button type="submit" size="sm" className="gap-2" disabled={!addTitle.trim() || !addDate.trim()}>
+              <Plus className="h-3.5 w-3.5" />
+              Add Milestone
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
       {/* Progress bar */}
       <Card className="p-5">
         <div className="flex items-center justify-between mb-3">
           <div>
             <p className="text-sm font-medium">Overall Progress</p>
-            <p className="text-xs text-muted-foreground">{completedCount} of {mockMilestones.length} milestones completed</p>
+            <p className="text-xs text-muted-foreground">{completedCount} of {milestones.length} milestones completed</p>
           </div>
           <span className="text-2xl font-bold tabular-nums">{progress}%</span>
         </div>
@@ -225,6 +306,32 @@ export default function Roadmap() {
                   {/* Expanded content */}
                   {isExpanded && (
                     <div className="mt-4 pt-4 border-t border-border/50 space-y-3">
+                      {/* Status change */}
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                          Change Status
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(Object.keys(statusConfig) as MilestoneStatus[]).map((s) => (
+                            <button
+                              key={s}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStatusChange(milestone.id, s);
+                              }}
+                              className={cn(
+                                'rounded-md px-2 py-1 text-[10px] font-medium border transition-colors',
+                                milestone.status === s
+                                  ? 'border-primary bg-primary/10 text-primary'
+                                  : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30'
+                              )}
+                            >
+                              {statusConfig[s].label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
                       {/* Linked items */}
                       {milestone.linkedItems.length > 0 && (
                         <div>
@@ -250,7 +357,7 @@ export default function Roadmap() {
                           </p>
                           <div className="flex flex-wrap gap-1.5">
                             {milestone.dependencies.map((depId) => {
-                              const dep = mockMilestones.find((m) => m.id === depId);
+                              const dep = milestones.find((m) => m.id === depId);
                               if (!dep) return null;
                               const depConfig = statusConfig[dep.status];
                               return (

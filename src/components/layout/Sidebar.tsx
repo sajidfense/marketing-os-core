@@ -20,6 +20,7 @@ import {
   ChevronLeft,
   Zap,
   BarChart3,
+  Sparkles,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrg } from '@/contexts/OrgContext';
@@ -59,10 +60,11 @@ const navSections = [
   {
     label: 'AI Tools',
     items: [
-      { to: '/skills', label: 'Ad Copy', icon: PenLine },
+      { to: '/ai/ad-copy', label: 'Ad Copy', icon: PenLine },
       { to: '/ai/video-scripts', label: 'Video Scripts', icon: Video },
       { to: '/ai/social-captions', label: 'Social Captions', icon: MessageSquare },
       { to: '/ai/blog-planner', label: 'Blog Planner', icon: FileText },
+      { to: '/skills', label: 'All AI Skills', icon: Sparkles },
     ],
   },
 ];

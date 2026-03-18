@@ -179,12 +179,15 @@ export default function Hero() {
             Start Free Trial
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </Link>
-          <button className="group inline-flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/8 border border-white/10 hover:border-white/20 text-white font-body font-medium text-base px-8 py-4 rounded-xl transition-all">
+          <Link
+            to="/login"
+            className="group inline-flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/8 border border-white/10 hover:border-white/20 text-white font-body font-medium text-base px-8 py-4 rounded-xl transition-all"
+          >
             <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center">
               <Play className="w-3 h-3 fill-white ml-0.5" />
             </div>
             View Demo
-          </button>
+          </Link>
         </motion.div>
 
         {/* Social proof micro-line */}

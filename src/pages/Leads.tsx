@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import {
   Users,
   Plus,
@@ -18,6 +18,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { exportToCSV } from '@/lib/export';
 import { cn } from '@/lib/utils';
 
@@ -44,7 +45,7 @@ const stageConfig: Record<LeadStage, { label: string; color: string; variant: 's
   lost: { label: 'Lost', color: '#64748B', variant: 'secondary' },
 };
 
-const mockLeads: Lead[] = [
+const initialLeads: Lead[] = [
   { id: '1', name: 'Sarah Chen', email: 'sarah@techflow.io', company: 'TechFlow', website: 'techflow.io', stage: 'qualified', value: 12000, tags: ['enterprise', 'saas'], lastActivity: '2 hours ago' },
   { id: '2', name: 'Marcus Johnson', email: 'marcus@retailmax.com', company: 'RetailMax', website: 'retailmax.com', stage: 'proposal', value: 24000, tags: ['ecommerce'], lastActivity: '1 day ago' },
   { id: '3', name: 'Emily Wong', email: 'emily@greenleaf.co', company: 'GreenLeaf', website: 'greenleaf.co', stage: 'new', value: 8000, tags: ['startup'], lastActivity: '3 hours ago' },
@@ -59,11 +60,18 @@ function formatCurrency(n: number) {
 }
 
 export default function Leads() {
+  const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState<LeadStage | 'all'>('all');
   const [view, setView] = useState<'table' | 'pipeline'>('table');
+  const [showAdd, setShowAdd] = useState(false);
+  const [addName, setAddName] = useState('');
+  const [addEmail, setAddEmail] = useState('');
+  const [addCompany, setAddCompany] = useState('');
+  const [addValue, setAddValue] = useState('');
+  const [addStage, setAddStage] = useState<LeadStage>('new');
 
-  const filtered = mockLeads
+  const filtered = leads
     .filter((l) => stageFilter === 'all' || l.stage === stageFilter)
     .filter((l) =>
       search === '' ||
@@ -90,6 +98,29 @@ export default function Leads() {
     toast.success('Leads exported');
   }
 
+  function handleAdd(e: FormEvent) {
+    e.preventDefault();
+    const newLead: Lead = {
+      id: String(Date.now()),
+      name: addName,
+      email: addEmail,
+      company: addCompany,
+      website: '',
+      stage: addStage,
+      value: parseInt(addValue, 10) || 0,
+      tags: [],
+      lastActivity: 'Just now',
+    };
+    setLeads((prev) => [newLead, ...prev]);
+    setShowAdd(false);
+    setAddName('');
+    setAddEmail('');
+    setAddCompany('');
+    setAddValue('');
+    setAddStage('new');
+    toast.success('Lead added');
+  }
+
   const totalValue = filtered.reduce((s, l) => s + l.value, 0);
 
   return (
@@ -103,13 +134,62 @@ export default function Leads() {
               <Download className="h-3 w-3" />
               Export
             </Button>
-            <Button size="sm" className="gap-2">
+            <Button size="sm" className="gap-2" onClick={() => setShowAdd(true)}>
               <Plus className="h-3.5 w-3.5" />
               Add Lead
             </Button>
           </div>
         }
       />
+
+      {/* Add Lead Dialog */}
+      <Dialog open={showAdd} onClose={() => setShowAdd(false)}>
+        <DialogHeader>
+          <DialogTitle>Add Lead</DialogTitle>
+          <DialogDescription>Add a new lead to your pipeline.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleAdd} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Name *</label>
+              <Input value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="Full name" required />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Email *</label>
+              <Input type="email" value={addEmail} onChange={(e) => setAddEmail(e.target.value)} placeholder="email@company.com" required />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Company</label>
+              <Input value={addCompany} onChange={(e) => setAddCompany(e.target.value)} placeholder="Company name" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Deal Value ($)</label>
+              <Input type="number" value={addValue} onChange={(e) => setAddValue(e.target.value)} placeholder="0" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Stage</label>
+            <select
+              value={addStage}
+              onChange={(e) => setAddStage(e.target.value as LeadStage)}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              {Object.entries(stageConfig).map(([key, cfg]) => (
+                <option key={key} value={key}>{cfg.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setShowAdd(false)}>Cancel</Button>
+            <Button type="submit" size="sm" className="gap-2" disabled={!addName.trim() || !addEmail.trim()}>
+              <Plus className="h-3.5 w-3.5" />
+              Add Lead
+            </Button>
+          </div>
+        </form>
+      </Dialog>
 
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -155,7 +235,7 @@ export default function Leads() {
         <div className="flex gap-3 overflow-x-auto pb-4">
           {pipelineStages.map((stage) => {
             const cfg = stageConfig[stage];
-            const stageLeads = mockLeads.filter((l) => l.stage === stage);
+            const stageLeads = leads.filter((l) => l.stage === stage);
             return (
               <div key={stage} className="min-w-[240px] flex-1">
                 <div className="flex items-center justify-between mb-3">
@@ -210,7 +290,7 @@ export default function Leads() {
                   title="No leads found"
                   description="Add your first lead or adjust your search filters."
                   actionLabel="Add Lead"
-                  onAction={() => {}}
+                  onAction={() => setShowAdd(true)}
                 />
               </div>
             ) : (

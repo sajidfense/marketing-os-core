@@ -68,7 +68,6 @@ export default function Pricing() {
   const navigate = useNavigate();
 
   async function handleSelect(planId: string) {
-    const token = localStorage.getItem('supabase.auth.token');
     const orgId = localStorage.getItem('currentOrganizationId') ?? '';
 
     if (!orgId) {
@@ -82,7 +81,6 @@ export default function Pricing() {
       const { url } = await createCheckoutSession(
         annual ? `${planId}_annual` : planId,
         orgId,
-        token ?? undefined,
       );
       window.location.href = url;
     } catch {

@@ -35,6 +35,9 @@ const Leads = lazy(() => import('@/pages/Leads'));
 const SEOPlan = lazy(() => import('@/pages/SEOPlan'));
 const CampaignStrategy = lazy(() => import('@/pages/CampaignStrategy'));
 const CreativeLibrary = lazy(() => import('@/pages/CreativeLibrary'));
+const AdCopy = lazy(() => import('@/pages/AdCopy'));
+const ResetPassword = lazy(() => import('@/pages/ResetPassword'));
+const UpdatePassword = lazy(() => import('@/pages/UpdatePassword'));
 
 function PageLoader() {
   return (
@@ -67,6 +70,8 @@ export default function App() {
         <Route path="/admin" element={<AdminProvision />} />
         <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
         <Route path="/signup" element={user ? <Navigate to="/" replace /> : <Signup />} />
+        <Route path="/reset-password" element={user ? <Navigate to="/" replace /> : <ResetPassword />} />
+        <Route path="/update-password" element={<UpdatePassword />} />
         <Route
           path="/onboarding"
           element={
@@ -97,6 +102,7 @@ export default function App() {
           <Route path="/integrations" element={<Integrations />} />
           <Route path="/google-ads" element={<GoogleAds />} />
           <Route path="/semrush" element={<Semrush />} />
+          <Route path="/ai/ad-copy" element={<AdCopy />} />
           <Route path="/ai/video-scripts" element={<VideoScripts />} />
           <Route path="/ai/social-captions" element={<SocialCaptions />} />
           <Route path="/ai/blog-planner" element={<BlogPlanner />} />

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Target,
   Plus,
@@ -11,10 +12,14 @@ import {
   Users,
   Sparkles,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 interface Strategy {
@@ -36,7 +41,7 @@ const statusVariant: Record<string, 'success' | 'default' | 'secondary' | 'warni
   paused: 'warning',
 };
 
-const mockStrategies: Strategy[] = [
+const initialStrategies: Strategy[] = [
   {
     id: '1',
     name: 'Q1 Growth Campaign',
@@ -102,10 +107,41 @@ function formatCurrency(n: number) {
 }
 
 export default function CampaignStrategy() {
+  const navigate = useNavigate();
+  const [strategies, setStrategies] = useState<Strategy[]>(initialStrategies);
   const [expandedId, setExpandedId] = useState<string | null>('1');
+  const [showAdd, setShowAdd] = useState(false);
+  const [addName, setAddName] = useState('');
+  const [addObjective, setAddObjective] = useState('');
+  const [addBudget, setAddBudget] = useState('');
+  const [addTimeframe, setAddTimeframe] = useState('');
+  const [addChannels, setAddChannels] = useState('');
 
-  const totalBudget = mockStrategies.reduce((s, st) => s + st.budget, 0);
-  const activeCount = mockStrategies.filter((s) => s.status === 'active').length;
+  const totalBudget = strategies.reduce((s, st) => s + st.budget, 0);
+  const activeCount = strategies.filter((s) => s.status === 'active').length;
+
+  function handleAdd(e: FormEvent) {
+    e.preventDefault();
+    const newStrategy: Strategy = {
+      id: String(Date.now()),
+      name: addName,
+      objective: addObjective,
+      status: 'planning',
+      channels: addChannels.split(',').map((c) => c.trim()).filter(Boolean),
+      budget: parseInt(addBudget, 10) || 0,
+      timeframe: addTimeframe,
+      kpis: [],
+      audiences: [],
+    };
+    setStrategies((prev) => [...prev, newStrategy]);
+    setShowAdd(false);
+    setAddName('');
+    setAddObjective('');
+    setAddBudget('');
+    setAddTimeframe('');
+    setAddChannels('');
+    toast.success('Strategy created');
+  }
 
   return (
     <div className="space-y-8">
@@ -113,12 +149,57 @@ export default function CampaignStrategy() {
         title="Campaign Strategy"
         description="High-level strategy planning and KPI tracking"
         actions={
-          <Button size="sm" className="gap-2">
-            <Plus className="h-3.5 w-3.5" />
-            New Strategy
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => navigate('/skills')}>
+              <Sparkles className="h-3.5 w-3.5" />
+              Generate Ideas
+            </Button>
+            <Button size="sm" className="gap-2" onClick={() => setShowAdd(true)}>
+              <Plus className="h-3.5 w-3.5" />
+              New Strategy
+            </Button>
+          </div>
         }
       />
+
+      {/* Add Strategy Dialog */}
+      <Dialog open={showAdd} onClose={() => setShowAdd(false)}>
+        <DialogHeader>
+          <DialogTitle>New Strategy</DialogTitle>
+          <DialogDescription>Create a new campaign strategy.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleAdd} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Strategy Name *</label>
+            <Input value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="e.g. Q2 Demand Gen" required />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Objective</label>
+            <Textarea value={addObjective} onChange={(e) => setAddObjective(e.target.value)} placeholder="What is the goal of this strategy?" rows={3} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Budget ($)</label>
+              <Input type="number" value={addBudget} onChange={(e) => setAddBudget(e.target.value)} placeholder="10000" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Timeframe</label>
+              <Input value={addTimeframe} onChange={(e) => setAddTimeframe(e.target.value)} placeholder="e.g. Apr - Jun 2026" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Channels (comma-separated)</label>
+            <Input value={addChannels} onChange={(e) => setAddChannels(e.target.value)} placeholder="Google Ads, LinkedIn, Email" />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setShowAdd(false)}>Cancel</Button>
+            <Button type="submit" size="sm" className="gap-2" disabled={!addName.trim()}>
+              <Plus className="h-3.5 w-3.5" />
+              Create Strategy
+            </Button>
+          </div>
+        </form>
+      </Dialog>
 
       {/* Overview */}
       <div className="grid gap-4 sm:grid-cols-3">
@@ -133,14 +214,14 @@ export default function CampaignStrategy() {
         <Card className="p-4">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Channels in Use</p>
           <p className="text-xl font-bold tabular-nums mt-0.5">
-            {new Set(mockStrategies.flatMap((s) => s.channels)).size}
+            {new Set(strategies.flatMap((s) => s.channels)).size}
           </p>
         </Card>
       </div>
 
       {/* Strategy cards */}
       <div className="space-y-3">
-        {mockStrategies.map((strategy) => {
+        {strategies.map((strategy) => {
           const isExpanded = expandedId === strategy.id;
 
           return (
@@ -182,33 +263,37 @@ export default function CampaignStrategy() {
                 {isExpanded && (
                   <div className="mt-5 pt-5 border-t border-border/50 space-y-5">
                     {/* KPIs */}
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">Key Metrics</p>
-                      <div className="grid gap-3 sm:grid-cols-3">
-                        {strategy.kpis.map((kpi, i) => (
-                          <div key={i} className="rounded-lg border border-border/50 p-3">
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{kpi.label}</p>
-                            <div className="flex items-baseline gap-2 mt-1">
-                              <span className="text-lg font-bold tabular-nums">{kpi.current}</span>
-                              <span className="text-[10px] text-muted-foreground">/ {kpi.target}</span>
+                    {strategy.kpis.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">Key Metrics</p>
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          {strategy.kpis.map((kpi, i) => (
+                            <div key={i} className="rounded-lg border border-border/50 p-3">
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{kpi.label}</p>
+                              <div className="flex items-baseline gap-2 mt-1">
+                                <span className="text-lg font-bold tabular-nums">{kpi.current}</span>
+                                <span className="text-[10px] text-muted-foreground">/ {kpi.target}</span>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Audiences */}
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Target Audiences</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {strategy.audiences.map((aud) => (
-                          <Badge key={aud} variant="outline" className="text-[10px] gap-1">
-                            <Users className="h-2.5 w-2.5" />
-                            {aud}
-                          </Badge>
-                        ))}
+                    {strategy.audiences.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Target Audiences</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {strategy.audiences.map((aud) => (
+                            <Badge key={aud} variant="outline" className="text-[10px] gap-1">
+                              <Users className="h-2.5 w-2.5" />
+                              {aud}
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 )}
               </CardContent>

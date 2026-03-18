@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import {
   Image,
   Plus,
@@ -20,6 +20,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 type AssetType = 'image' | 'video' | 'document' | 'audio';
@@ -42,7 +43,9 @@ const typeConfig: Record<AssetType, { icon: typeof Image; label: string }> = {
   audio: { icon: Music, label: 'Audio' },
 };
 
-const mockAssets: Asset[] = [
+const placeholderColors = ['#6366F1', '#22C55E', '#F59E0B', '#EC4899', '#8B5CF6', '#3B82F6', '#14B8A6', '#F97316'];
+
+const initialAssets: Asset[] = [
   { id: '1', name: 'Hero Banner - Spring Campaign', type: 'image', tags: ['banner', 'spring'], size: '2.4 MB', campaign: 'Spring Launch', uploadedAt: '2 days ago', color: '#6366F1' },
   { id: '2', name: 'Product Demo Video', type: 'video', tags: ['demo', 'product'], size: '48 MB', campaign: 'Q1 Growth', uploadedAt: '3 days ago', color: '#22C55E' },
   { id: '3', name: 'Brand Guidelines v3', type: 'document', tags: ['brand', 'guidelines'], size: '1.2 MB', campaign: null, uploadedAt: '1 week ago', color: '#F59E0B' },
@@ -54,11 +57,17 @@ const mockAssets: Asset[] = [
 ];
 
 export default function CreativeLibrary() {
+  const [assets, setAssets] = useState<Asset[]>(initialAssets);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<AssetType | 'all'>('all');
   const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [showAdd, setShowAdd] = useState(false);
+  const [addName, setAddName] = useState('');
+  const [addType, setAddType] = useState<AssetType>('image');
+  const [addTags, setAddTags] = useState('');
+  const [addCampaign, setAddCampaign] = useState('');
 
-  const filtered = mockAssets
+  const filtered = assets
     .filter((a) => typeFilter === 'all' || a.type === typeFilter)
     .filter((a) =>
       search === '' ||
@@ -66,18 +75,82 @@ export default function CreativeLibrary() {
       a.tags.some((t) => t.includes(search.toLowerCase()))
     );
 
+  function handleAdd(e: FormEvent) {
+    e.preventDefault();
+    const newAsset: Asset = {
+      id: String(Date.now()),
+      name: addName,
+      type: addType,
+      tags: addTags.split(',').map((t) => t.trim()).filter(Boolean),
+      size: '0 MB',
+      campaign: addCampaign || null,
+      uploadedAt: 'Just now',
+      color: placeholderColors[Math.floor(Math.random() * placeholderColors.length)],
+    };
+    setAssets((prev) => [newAsset, ...prev]);
+    setShowAdd(false);
+    setAddName('');
+    setAddTags('');
+    setAddCampaign('');
+    setAddType('image');
+    toast.success('Asset added to library');
+  }
+
   return (
     <div className="space-y-8">
       <PageHeader
         title="Creative Library"
         description="Manage and organize your marketing assets"
         actions={
-          <Button size="sm" className="gap-2">
+          <Button size="sm" className="gap-2" onClick={() => setShowAdd(true)}>
             <Plus className="h-3.5 w-3.5" />
             Upload Asset
           </Button>
         }
       />
+
+      {/* Upload Asset Dialog */}
+      <Dialog open={showAdd} onClose={() => setShowAdd(false)}>
+        <DialogHeader>
+          <DialogTitle>Upload Asset</DialogTitle>
+          <DialogDescription>Add a new asset to your creative library.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleAdd} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Asset Name *</label>
+            <Input value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="e.g. Facebook Ad Banner - Summer" required />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Type</label>
+              <select
+                value={addType}
+                onChange={(e) => setAddType(e.target.value as AssetType)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                {Object.entries(typeConfig).map(([key, cfg]) => (
+                  <option key={key} value={key}>{cfg.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Campaign</label>
+              <Input value={addCampaign} onChange={(e) => setAddCampaign(e.target.value)} placeholder="Optional campaign" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Tags (comma-separated)</label>
+            <Input value={addTags} onChange={(e) => setAddTags(e.target.value)} placeholder="e.g. banner, social, campaign" />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setShowAdd(false)}>Cancel</Button>
+            <Button type="submit" size="sm" className="gap-2" disabled={!addName.trim()}>
+              <Plus className="h-3.5 w-3.5" />
+              Add Asset
+            </Button>
+          </div>
+        </form>
+      </Dialog>
 
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -119,7 +192,7 @@ export default function CreativeLibrary() {
           title="No assets found"
           description="Upload your first creative asset or adjust your search."
           actionLabel="Upload Asset"
-          onAction={() => {}}
+          onAction={() => setShowAdd(true)}
         />
       ) : view === 'grid' ? (
         /* Grid View */
@@ -136,7 +209,13 @@ export default function CreativeLibrary() {
                 >
                   <Icon className="h-10 w-10 opacity-30" style={{ color: asset.color }} />
                   <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button className="flex h-7 w-7 items-center justify-center rounded-lg bg-background/80 backdrop-blur-sm border border-border/50 hover:bg-background transition-colors">
+                    <button
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-background/80 backdrop-blur-sm border border-border/50 hover:bg-background transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toast.success(`Downloaded ${asset.name}`);
+                      }}
+                    >
                       <Download className="h-3 w-3" />
                     </button>
                   </div>

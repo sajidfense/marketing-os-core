@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   CalendarRange,
   Plus,
@@ -9,11 +10,15 @@ import {
   FileText,
   Video,
   MessageSquare,
+  Sparkles,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 type ContentType = 'blog' | 'social' | 'video' | 'email';
@@ -26,11 +31,11 @@ interface ContentItem {
   day: number; // day of month
 }
 
-const typeConfig: Record<ContentType, { icon: typeof FileText; color: string }> = {
-  blog: { icon: FileText, color: '#6366F1' },
-  social: { icon: MessageSquare, color: '#22C55E' },
-  video: { icon: Video, color: '#F59E0B' },
-  email: { icon: Image, color: '#EC4899' },
+const typeConfig: Record<ContentType, { icon: typeof FileText; color: string; label: string }> = {
+  blog: { icon: FileText, color: '#6366F1', label: 'Blog' },
+  social: { icon: MessageSquare, color: '#22C55E', label: 'Social' },
+  video: { icon: Video, color: '#F59E0B', label: 'Video' },
+  email: { icon: Image, color: '#EC4899', label: 'Email' },
 };
 
 const statusVariant: Record<string, 'success' | 'default' | 'secondary'> = {
@@ -42,8 +47,7 @@ const statusVariant: Record<string, 'success' | 'default' | 'secondary'> = {
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-// Mock content for the current month
-const mockContent: ContentItem[] = [
+const initialContent: ContentItem[] = [
   { id: '1', title: 'Product Launch Blog', type: 'blog', status: 'published', day: 3 },
   { id: '2', title: 'Instagram Carousel', type: 'social', status: 'published', day: 5 },
   { id: '3', title: 'Demo Video', type: 'video', status: 'scheduled', day: 8 },
@@ -59,10 +63,17 @@ const mockContent: ContentItem[] = [
 ];
 
 export default function ContentCalendar() {
+  const navigate = useNavigate();
+  const [content, setContent] = useState<ContentItem[]>(initialContent);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [view, setView] = useState<'calendar' | 'list'>('calendar');
+  const [showAdd, setShowAdd] = useState(false);
+  const [addTitle, setAddTitle] = useState('');
+  const [addType, setAddType] = useState<ContentType>('blog');
+  const [addDay, setAddDay] = useState('');
+  const [addStatus, setAddStatus] = useState<'draft' | 'scheduled'>('draft');
 
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const firstDayOfWeek = (new Date(currentYear, currentMonth, 1).getDay() + 6) % 7; // Mon=0
@@ -86,21 +97,49 @@ export default function ContentCalendar() {
 
   const contentByDay = useMemo(() => {
     const map: Record<number, ContentItem[]> = {};
-    for (const item of mockContent) {
+    for (const item of content) {
       if (!map[item.day]) map[item.day] = [];
       map[item.day].push(item);
     }
     return map;
-  }, []);
+  }, [content]);
 
   const selectedItems = selectedDay ? contentByDay[selectedDay] ?? [] : [];
 
   const stats = useMemo(() => ({
-    total: mockContent.length,
-    published: mockContent.filter((c) => c.status === 'published').length,
-    scheduled: mockContent.filter((c) => c.status === 'scheduled').length,
-    draft: mockContent.filter((c) => c.status === 'draft').length,
-  }), []);
+    total: content.length,
+    published: content.filter((c) => c.status === 'published').length,
+    scheduled: content.filter((c) => c.status === 'scheduled').length,
+    draft: content.filter((c) => c.status === 'draft').length,
+  }), [content]);
+
+  function handleAdd(e: FormEvent) {
+    e.preventDefault();
+    const dayNum = parseInt(addDay, 10);
+    if (isNaN(dayNum) || dayNum < 1 || dayNum > daysInMonth) {
+      toast.error(`Day must be between 1 and ${daysInMonth}`);
+      return;
+    }
+    const newItem: ContentItem = {
+      id: String(Date.now()),
+      title: addTitle,
+      type: addType,
+      status: addStatus,
+      day: dayNum,
+    };
+    setContent((prev) => [...prev, newItem]);
+    setShowAdd(false);
+    setAddTitle('');
+    setAddDay('');
+    setAddType('blog');
+    setAddStatus('draft');
+    toast.success('Content added to calendar');
+  }
+
+  function openAddForDay(day: number) {
+    setAddDay(String(day));
+    setShowAdd(true);
+  }
 
   return (
     <div className="space-y-8">
@@ -123,13 +162,74 @@ export default function ContentCalendar() {
                 </button>
               ))}
             </div>
-            <Button size="sm" className="gap-2">
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => navigate('/ai/blog-planner')}>
+              <Sparkles className="h-3.5 w-3.5" />
+              Generate Post
+            </Button>
+            <Button size="sm" className="gap-2" onClick={() => setShowAdd(true)}>
               <Plus className="h-3.5 w-3.5" />
               New Content
             </Button>
           </div>
         }
       />
+
+      {/* Add Content Dialog */}
+      <Dialog open={showAdd} onClose={() => setShowAdd(false)}>
+        <DialogHeader>
+          <DialogTitle>New Content</DialogTitle>
+          <DialogDescription>Schedule a new content piece for the calendar.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleAdd} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Title *</label>
+            <Input value={addTitle} onChange={(e) => setAddTitle(e.target.value)} placeholder="e.g. Instagram Carousel - Product Tips" required />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Type</label>
+              <select
+                value={addType}
+                onChange={(e) => setAddType(e.target.value as ContentType)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                {Object.entries(typeConfig).map(([key, cfg]) => (
+                  <option key={key} value={key}>{cfg.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Day of Month *</label>
+              <Input type="number" min={1} max={daysInMonth} value={addDay} onChange={(e) => setAddDay(e.target.value)} placeholder={`1-${daysInMonth}`} required />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Status</label>
+            <div className="flex gap-2">
+              {(['draft', 'scheduled'] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setAddStatus(s)}
+                  className={cn(
+                    'rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors capitalize',
+                    addStatus === s ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setShowAdd(false)}>Cancel</Button>
+            <Button type="submit" size="sm" className="gap-2" disabled={!addTitle.trim() || !addDay}>
+              <Plus className="h-3.5 w-3.5" />
+              Add Content
+            </Button>
+          </div>
+        </form>
+      </Dialog>
 
       {/* Stats */}
       <div className="grid gap-3 sm:grid-cols-4">
@@ -223,9 +323,17 @@ export default function ContentCalendar() {
 
         {/* Detail panel */}
         <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-muted-foreground">
-            {selectedDay ? `${MONTHS[currentMonth]} ${selectedDay}` : 'Select a day'}
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-muted-foreground">
+              {selectedDay ? `${MONTHS[currentMonth]} ${selectedDay}` : 'Select a day'}
+            </h3>
+            {selectedDay && (
+              <Button variant="ghost" size="sm" className="h-7 text-[10px] gap-1" onClick={() => openAddForDay(selectedDay)}>
+                <Plus className="h-3 w-3" />
+                Add
+              </Button>
+            )}
+          </div>
 
           {selectedItems.length > 0 ? (
             selectedItems.map((item) => {
@@ -257,6 +365,12 @@ export default function ContentCalendar() {
               <p className="text-xs text-muted-foreground">
                 {selectedDay ? 'No content scheduled' : 'Click a date to view content'}
               </p>
+              {selectedDay && (
+                <Button variant="ghost" size="sm" className="mt-3 text-xs gap-1" onClick={() => openAddForDay(selectedDay)}>
+                  <Plus className="h-3 w-3" />
+                  Add content
+                </Button>
+              )}
             </Card>
           )}
         </div>
