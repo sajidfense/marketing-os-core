@@ -95,14 +95,12 @@ function StepOrg({ onComplete }: { onComplete: (orgId: string, orgName: string) 
         name: name.trim(),
       });
       if (res.success && res.data) {
-        localStorage.setItem('currentOrganizationId', res.data.organization.id);
         await refresh();
         onComplete(res.data.organization.id, res.data.organization.name);
       }
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        const orgId = localStorage.getItem('currentOrganizationId') ?? '';
-        onComplete(orgId, name);
+        onComplete('', name);
         return;
       }
       toast.error(err instanceof ApiError ? err.message : 'Failed to create organization');
@@ -161,13 +159,8 @@ function StepBranding({ onNext, onBack }: { onNext: () => void; onBack: () => vo
 
   async function handleSave() {
     setSaving(true);
-    const orgId = localStorage.getItem('currentOrganizationId') ?? '';
     try {
-      await fetch(`${API_URL}/branding`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-organization-id': orgId },
-        body: JSON.stringify({ primary_color: primaryColor, secondary_color: secondaryColor }),
-      });
+      await api.post('/branding', { primary_color: primaryColor, secondary_color: secondaryColor });
     } catch {
       // Non-critical — continue anyway
     } finally {
@@ -333,24 +326,15 @@ const MINI_PLANS = [
 
 function StepPlan({ onBack, onComplete }: { onBack: () => void; onComplete: () => void }) {
   const [loading, setLoading] = useState<string | null>(null);
-  const { session } = useAuth();
 
   async function handleSelect(planId: string) {
-    const orgId = localStorage.getItem('currentOrganizationId') ?? '';
     setLoading(planId);
     try {
-      const res = await fetch(`${API_URL}/billing/create-checkout-session`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token ?? ''}`,
-          'x-organization-id': orgId,
-        },
-        body: JSON.stringify({ plan_id: planId, organization_id: orgId }),
+      const res = await api.post<ApiResponse<{ url: string }>>('/billing/create-checkout-session', {
+        plan_id: planId,
       });
-      const data = await res.json() as { url?: string };
-      if (data.url) {
-        window.location.href = data.url;
+      if (res.data?.url) {
+        window.location.href = res.data.url;
       } else {
         throw new Error('No checkout URL');
       }

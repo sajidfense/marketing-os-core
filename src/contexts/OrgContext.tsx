@@ -1,19 +1,13 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';
-import { api } from '@/services/api';
+import { api, ApiError } from '@/services/api';
 import type { Organization, BrandingSettings, ApiResponse } from '@/types';
-
-interface OnboardingStatus {
-  hasOrganizations: boolean;
-  organizations: Array<{ id: string; name: string; role: string }>;
-}
 
 interface OrgContextValue {
   currentOrg: Organization | null;
   branding: BrandingSettings | null;
   loading: boolean;
   needsOnboarding: boolean;
-  switchOrg: (orgId: string) => void;
   refresh: () => Promise<void>;
 }
 
@@ -36,30 +30,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      let orgId = localStorage.getItem('currentOrganizationId');
-
-      // No org in localStorage — check if user has any orgs
-      if (!orgId) {
-        const status = await api.get<ApiResponse<OnboardingStatus>>('/onboarding/status');
-        if (status.success && status.data) {
-          if (status.data.hasOrganizations && status.data.organizations.length > 0) {
-            // Auto-select first org
-            orgId = status.data.organizations[0].id;
-            localStorage.setItem('currentOrganizationId', orgId);
-          } else {
-            // No orgs — needs onboarding
-            setNeedsOnboarding(true);
-            setLoading(false);
-            return;
-          }
-        } else {
-          setNeedsOnboarding(true);
-          setLoading(false);
-          return;
-        }
-      }
-
-      // Fetch org settings
+      // The server resolves the org from the authenticated user — no header needed
       const result = await api.get<ApiResponse<{ organization: Organization; branding: BrandingSettings | null }>>('/organizations/settings');
       if (result.success && result.data) {
         setCurrentOrg(result.data.organization);
@@ -67,24 +38,15 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         setNeedsOnboarding(false);
       }
     } catch (err) {
-      // If 403, user was removed from org — clear and check status
-      if (err instanceof Error && 'status' in err && (err as { status: number }).status === 403) {
-        localStorage.removeItem('currentOrganizationId');
+      if (err instanceof ApiError && err.status === 403) {
+        // User not assigned to any org — needs onboarding
         setCurrentOrg(null);
-        try {
-          const status = await api.get<ApiResponse<OnboardingStatus>>('/onboarding/status');
-          if (status.data?.hasOrganizations && status.data.organizations.length > 0) {
-            localStorage.setItem('currentOrganizationId', status.data.organizations[0].id);
-            setLoading(true);
-            fetchOrgSettings();
-            return;
-          }
-        } catch {
-          // fallthrough
-        }
         setNeedsOnboarding(true);
+      } else if (err instanceof ApiError && err.status === 401) {
+        // Auth failure — don't set onboarding, let auth context handle it
+        setCurrentOrg(null);
       } else {
-        console.error('Failed to fetch organization settings');
+        console.error('Failed to fetch organization settings:', err);
       }
     } finally {
       setLoading(false);
@@ -95,14 +57,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     fetchOrgSettings();
   }, [fetchOrgSettings]);
 
-  const switchOrg = useCallback((orgId: string) => {
-    localStorage.setItem('currentOrganizationId', orgId);
-    setLoading(true);
-    fetchOrgSettings();
-  }, [fetchOrgSettings]);
-
   return (
-    <OrgContext.Provider value={{ currentOrg, branding, loading, needsOnboarding, switchOrg, refresh: fetchOrgSettings }}>
+    <OrgContext.Provider value={{ currentOrg, branding, loading, needsOnboarding, refresh: fetchOrgSettings }}>
       {children}
     </OrgContext.Provider>
   );

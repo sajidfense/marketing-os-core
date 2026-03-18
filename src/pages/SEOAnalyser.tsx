@@ -1,7 +1,7 @@
 import { useState, useRef, type FormEvent } from 'react';
 import { toast } from 'sonner';
 import { SearchCheck, Loader2, Copy, Check, AlertCircle } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -109,7 +109,6 @@ function CWVCard({ label, abbr, metric, target }: { label: string; abbr: string;
 }
 
 export default function SEOAnalyser() {
-  const { session } = useAuth();
   const [url, setUrl] = useState('');
   const [loadingStage, setLoadingStage] = useState<LoadingStage>('idle');
   const [scores, setScores] = useState<ScoresData | null>(null);
@@ -143,15 +142,13 @@ export default function SEOAnalyser() {
     setScores(null);
     setLoadingStage('fetching');
 
-    const orgId = localStorage.getItem('currentOrganizationId') ?? '';
-
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
       const response = await fetch(`${API_URL}/seo/analyse`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token ?? ''}`,
-          'x-organization-id': orgId,
+          Authorization: `Bearer ${sessionData.session?.access_token ?? ''}`,
         },
         body: JSON.stringify({ url: trimmed }),
         signal: controller.signal,

@@ -5,8 +5,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { createCheckoutSession } from '@/services/ai';
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
-
 const plans = [
   {
     id: 'starter',
@@ -68,23 +66,15 @@ export default function Pricing() {
   const navigate = useNavigate();
 
   async function handleSelect(planId: string) {
-    const orgId = localStorage.getItem('currentOrganizationId') ?? '';
-
-    if (!orgId) {
-      // Not logged in — send to signup
-      navigate('/signup');
-      return;
-    }
-
     setLoading(planId);
     try {
       const { url } = await createCheckoutSession(
         annual ? `${planId}_annual` : planId,
-        orgId,
       );
       window.location.href = url;
     } catch {
       toast.error('Could not start checkout. Please try again.');
+      navigate('/signup');
     } finally {
       setLoading(null);
     }

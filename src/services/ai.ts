@@ -29,13 +29,12 @@ export async function runAISkill<T = { content: string }>(
 
 /**
  * Create a Stripe checkout session for plan upgrades.
+ * Organization is resolved server-side from the authenticated user.
  */
 export async function createCheckoutSession(
   planId: string,
-  organizationId: string,
 ): Promise<{ url: string }> {
   return api.post<{ url: string }>('/billing/create-checkout-session', {
     plan_id: planId,
-    organization_id: organizationId,
   });
 }

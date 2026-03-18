@@ -19,11 +19,6 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${data.session.access_token}`;
     }
 
-    const orgId = localStorage.getItem('currentOrganizationId');
-    if (orgId) {
-      headers['x-organization-id'] = orgId;
-    }
-
     return headers;
   }
 
