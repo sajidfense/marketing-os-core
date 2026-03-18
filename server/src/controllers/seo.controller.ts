@@ -7,6 +7,7 @@ import {
   buildSEOAnalysisPrompt,
   type PageSpeedResult,
 } from '../services/seo.service';
+import { generateSkill } from '../services/marketingSkills.service';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const SEO_MODEL = 'claude-sonnet-4-6';
@@ -148,5 +149,90 @@ export async function analyseUrl(req: Request, res: Response): Promise<void> {
     console.error('[seo] analyseUrl error:', err);
     sendEvent({ type: 'error', message });
     res.end();
+  }
+}
+
+// ── Structured SEO Analysis (JSON response) ─────────────────────────
+export async function analyzePageSEO(req: Request, res: Response): Promise<void> {
+  const { url, keyword } = req.body as { url?: string; keyword?: string };
+
+  if (!url || typeof url !== 'string' || !isValidHttpUrl(url.trim())) {
+    res.status(400).json({ error: 'A valid http/https URL is required.' });
+    return;
+  }
+
+  try {
+    const onPage = await scrapeOnPageSEO(url.trim());
+
+    const skillInput = {
+      url: url.trim(),
+      keyword: keyword ?? undefined,
+      title: onPage.title ?? undefined,
+      metaDescription: onPage.metaDescription ?? undefined,
+      h1Tags: onPage.h1Tags,
+      h2Tags: onPage.h2Tags,
+      wordCount: onPage.wordCount,
+      imageCount: onPage.imageCount,
+      imagesWithoutAlt: onPage.imagesWithoutAlt,
+      internalLinks: onPage.internalLinks,
+      externalLinks: onPage.externalLinks,
+      hasSchemaMarkup: onPage.hasSchemaMarkup,
+    };
+
+    const result = await generateSkill(
+      'seo-analysis',
+      skillInput,
+      req.organizationId!,
+      req.userId!,
+    );
+
+    res.json({ success: true, data: result });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'SEO analysis failed';
+    console.error('[seo] analyzePageSEO error:', err);
+    res.status(500).json({ error: message });
+  }
+}
+
+// ── Structured SEO Report (JSON response) ───────────────────────────
+export async function generateSEOReport(req: Request, res: Response): Promise<void> {
+  const { url, keyword } = req.body as { url?: string; keyword?: string };
+
+  if (!url || typeof url !== 'string' || !isValidHttpUrl(url.trim())) {
+    res.status(400).json({ error: 'A valid http/https URL is required.' });
+    return;
+  }
+
+  try {
+    const onPage = await scrapeOnPageSEO(url.trim());
+
+    const skillInput = {
+      url: url.trim(),
+      keyword: keyword ?? undefined,
+      title: onPage.title ?? undefined,
+      metaDescription: onPage.metaDescription ?? undefined,
+      h1Tags: onPage.h1Tags,
+      h2Tags: onPage.h2Tags,
+      wordCount: onPage.wordCount,
+      imageCount: onPage.imageCount,
+      imagesWithoutAlt: onPage.imagesWithoutAlt,
+      internalLinks: onPage.internalLinks,
+      externalLinks: onPage.externalLinks,
+      hasSchemaMarkup: onPage.hasSchemaMarkup,
+      schemaTypes: onPage.schemaTypes,
+    };
+
+    const result = await generateSkill(
+      'seo-report',
+      skillInput,
+      req.organizationId!,
+      req.userId!,
+    );
+
+    res.json({ success: true, data: result });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'SEO report generation failed';
+    console.error('[seo] generateSEOReport error:', err);
+    res.status(500).json({ error: message });
   }
 }

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import {
   SearchCheck,
   Plus,
@@ -86,6 +86,22 @@ const difficultyVariant: Record<string, 'success' | 'warning' | 'destructive'> =
 
 export default function SEOPlan() {
   const [tasks, setTasks] = useState<SEOTask[]>(initialTasks);
+
+  // Pick up tasks from SEO Analyzer / Report pages
+  useEffect(() => {
+    const stored = sessionStorage.getItem('seo-plan-tasks');
+    if (stored) {
+      try {
+        const incoming = JSON.parse(stored) as SEOTask[];
+        if (incoming.length > 0) {
+          setTasks((prev) => [...prev, ...incoming]);
+          toast.success(`${incoming.length} tasks imported from SEO report`);
+        }
+      } catch { /* ignore */ }
+      sessionStorage.removeItem('seo-plan-tasks');
+    }
+  }, []);
+
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);

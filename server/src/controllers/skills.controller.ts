@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { generateSkill, getGenerationHistory } from '../services/marketingSkills.service';
 
-const VALID_SKILLS = ['ad-copy', 'landing-page', 'email-sequence', 'funnel-strategy', 'campaign-strategy', 'video-script', 'social-caption', 'blog-planner'];
+const VALID_SKILLS = ['ad-copy', 'landing-page', 'email-sequence', 'funnel-strategy', 'campaign-strategy', 'video-script', 'social-caption', 'blog-planner', 'seo-analysis', 'seo-report'];
 
 const skillInputSchema = z.object({
   product: z.string().min(1).max(500).optional(),
@@ -22,6 +22,20 @@ const skillInputSchema = z.object({
   topic: z.string().max(500).optional(),
   niche: z.string().max(200).optional(),
   keywords: z.array(z.string().max(200)).max(20).optional(),
+  // SEO tools
+  url: z.string().max(2000).optional(),
+  keyword: z.string().max(200).optional(),
+  title: z.string().max(500).optional(),
+  metaDescription: z.string().max(1000).optional(),
+  h1Tags: z.array(z.string().max(500)).max(10).optional(),
+  h2Tags: z.array(z.string().max(500)).max(30).optional(),
+  wordCount: z.number().optional(),
+  imageCount: z.number().optional(),
+  imagesWithoutAlt: z.number().optional(),
+  internalLinks: z.number().optional(),
+  externalLinks: z.number().optional(),
+  hasSchemaMarkup: z.boolean().optional(),
+  schemaTypes: z.array(z.string().max(100)).max(20).optional(),
 });
 
 export async function handleGenerateSkill(req: Request, res: Response): Promise<void> {

@@ -36,6 +36,8 @@ const SEOPlan = lazy(() => import('@/pages/SEOPlan'));
 const CampaignStrategy = lazy(() => import('@/pages/CampaignStrategy'));
 const CreativeLibrary = lazy(() => import('@/pages/CreativeLibrary'));
 const AdCopy = lazy(() => import('@/pages/AdCopy'));
+const SEOAnalyzerPage = lazy(() => import('@/pages/SEOAnalyzerPage'));
+const SEOReportPage = lazy(() => import('@/pages/SEOReportPage'));
 const ResetPassword = lazy(() => import('@/pages/ResetPassword'));
 const UpdatePassword = lazy(() => import('@/pages/UpdatePassword'));
 
@@ -99,6 +101,8 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/branding" element={<Branding />} />
           <Route path="/seo" element={<SEOAnalyser />} />
+          <Route path="/seo/analyzer" element={<SEOAnalyzerPage />} />
+          <Route path="/seo/report" element={<SEOReportPage />} />
           <Route path="/integrations" element={<Integrations />} />
           <Route path="/google-ads" element={<GoogleAds />} />
           <Route path="/semrush" element={<Semrush />} />

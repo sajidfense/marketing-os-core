@@ -30,7 +30,8 @@ class ApiClient {
   private async request<T>(
     method: string,
     path: string,
-    body?: unknown
+    body?: unknown,
+    isRetry = false,
   ): Promise<T> {
     const headers = await this.getHeaders();
     const url = `${this.baseUrl}${path}`;
@@ -40,6 +41,14 @@ class ApiClient {
       headers,
       body: body ? JSON.stringify(body) : undefined,
     });
+
+    // On 401, try refreshing the Supabase session and retry once
+    if (res.status === 401 && !isRetry) {
+      const { error } = await supabase.auth.refreshSession();
+      if (!error) {
+        return this.request<T>(method, path, body, true);
+      }
+    }
 
     if (!res.ok) {
       const errorBody = await res.json().catch(() => ({}));

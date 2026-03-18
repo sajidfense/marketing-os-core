@@ -10,8 +10,10 @@ import { campaignStrategySystem, campaignStrategyUser } from '../ai/prompts/camp
 import { videoScriptSystem, videoScriptUser }     from '../ai/prompts/videoScript';
 import { socialCaptionSystem, socialCaptionUser } from '../ai/prompts/socialCaption';
 import { blogPlannerSystem, blogPlannerUser }     from '../ai/prompts/blogPlanner';
+import { seoAnalysisSystem, seoAnalysisUser }     from '../ai/prompts/seoAnalysis';
+import { seoReportSystem, seoReportUser }         from '../ai/prompts/seoReport';
 
-type SkillType = 'ad-copy' | 'landing-page' | 'email-sequence' | 'funnel-strategy' | 'campaign-strategy' | 'video-script' | 'social-caption' | 'blog-planner';
+type SkillType = 'ad-copy' | 'landing-page' | 'email-sequence' | 'funnel-strategy' | 'campaign-strategy' | 'video-script' | 'social-caption' | 'blog-planner' | 'seo-analysis' | 'seo-report';
 
 interface SkillResult {
   generationId: string;
@@ -39,6 +41,10 @@ function resolvePrompt(skillType: SkillType, input: Record<string, unknown>) {
       return { system: socialCaptionSystem, user: socialCaptionUser(input as Parameters<typeof socialCaptionUser>[0]) };
     case 'blog-planner':
       return { system: blogPlannerSystem, user: blogPlannerUser(input as Parameters<typeof blogPlannerUser>[0]) };
+    case 'seo-analysis':
+      return { system: seoAnalysisSystem, user: seoAnalysisUser(input as Parameters<typeof seoAnalysisUser>[0]) };
+    case 'seo-report':
+      return { system: seoReportSystem, user: seoReportUser(input as Parameters<typeof seoReportUser>[0]) };
     default:
       throw new Error(`Unknown skill type: ${skillType}`);
   }
