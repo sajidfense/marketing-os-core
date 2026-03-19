@@ -1,44 +1,82 @@
 import { useState, useEffect, useRef } from 'react';
-import { motion, useInView } from 'framer-motion';
-import { Brain, ChevronRight } from 'lucide-react';
+import { motion, useInView, AnimatePresence } from 'framer-motion';
+import { Brain, Sparkles } from 'lucide-react';
 
-const insights = [
+const examples = [
   {
-    category: 'Budget Optimization',
+    label: 'Ad Copy',
     color: '#F59E0B',
-    messages: [
-      'Reallocate 23% of Campaign B spend → Campaign A. ROAS differential: 4.2× vs 1.8×.',
-      'Campaign B is spending $340/day below threshold efficiency. Recommend pause or creative refresh.',
-    ],
+    prompt: 'Write a high-converting Meta ad for a fitness app targeting 25-34 year olds',
+    output: `🎯 **Primary Text**
+Stop scrolling. Your 6-week transformation starts today.
+
+Join 40,000+ people who ditched the gym confusion and started seeing real results with AI-powered workout plans that adapt to YOUR body.
+
+✅ Personalised daily workouts
+✅ Nutrition tracking built in
+✅ Progress photos + measurements
+
+Download free. Cancel anytime.
+
+👉 Tap "Get Started" — your future self will thank you.`,
   },
   {
-    category: 'Creative Fatigue',
-    color: '#EF4444',
-    messages: [
-      'Ad Set #4 frequency reached 8.2 — 40% above safe threshold. Audience is tuning out.',
-      'Top-performing creative (ID: 94021) shows 67% CTR decline week-over-week. Rotate now.',
-    ],
+    label: 'Video Script',
+    color: '#22D3EE',
+    prompt: 'Write a 30s TikTok script for a SaaS product launch',
+    output: `[HOOK — 0-3s]
+"This one tool replaced our entire marketing stack."
+
+[PROBLEM — 3-10s]
+We were using Notion for strategy, Sheets for calendars, 3 different analytics dashboards...
+
+[SOLUTION — 10-20s]
+Then we switched to Syntra OS. Campaign planning, AI content, analytics — one platform.
+
+[PROOF — 20-25s]
+Our team saved 12 hours a week. ROAS went up 34%.
+
+[CTA — 25-30s]
+Link in bio. 14-day free trial. No credit card.`,
   },
   {
-    category: 'Audience Signal',
+    label: 'SEO Recommendations',
     color: '#34D399',
-    messages: [
-      'Lookalike 1% audience shows 2.1× better CPA vs Broad audience. Shift 35% of budget.',
-      'Retargeting pool grew 18% this week — increase frequency cap from 3 to 5 for this segment.',
-    ],
+    prompt: 'Analyse homepage SEO for example.com',
+    output: `## Priority Fixes
+
+1. **Title tag too long** (72 chars → target 60)
+   Current: "Example | The Best Platform For Everything You Need"
+   Suggested: "Example | All-in-One Marketing Platform"
+
+2. **Missing H1** — page uses H2 as primary heading
+   Action: Wrap hero headline in <h1>
+
+3. **LCP: 4.2s** (target < 2.5s)
+   Cause: Hero image is 2.4MB uncompressed PNG
+   Fix: Convert to WebP, add width/height, lazy-load below fold
+
+4. **No internal links** to /pricing or /features from homepage
+   Add contextual links in hero and feature sections`,
   },
   {
-    category: 'Performance Alert',
-    color: '#818CF8',
-    messages: [
-      'CPA improved 12.3% vs last week. Main driver: landing page A/B test variant B winning.',
-      'iOS campaign underperforming Android by 38%. Consider reducing iOS budget allocation.',
-    ],
+    label: 'Social Captions',
+    color: '#A78BFA',
+    prompt: 'Write 3 LinkedIn post hooks for a B2B SaaS launch',
+    output: `**Hook 1 — Contrarian**
+"We spent $40K on marketing tools last year. This year we spend $3K. Here's what changed."
+
+**Hook 2 — Story**
+"Last Tuesday our CMO asked: 'Why do we have 11 marketing tools and still no visibility?' That conversation changed everything."
+
+**Hook 3 — Data**
+"We reduced our marketing stack from 8 tools to 1. Result: 12 hours/week saved. 34% higher ROAS. 0 spreadsheets."
+
+All three follow the pattern: specific number + unexpected outcome + curiosity gap.`,
   },
 ];
 
-// ── Typewriter hook ─────────────────────────────────────────────────
-function useTypewriter(text: string, speed = 28) {
+function useTypewriter(text: string, speed = 16) {
   const [displayed, setDisplayed] = useState('');
   const [done, setDone] = useState(false);
 
@@ -63,12 +101,11 @@ function useTypewriter(text: string, speed = 28) {
   return { displayed, done };
 }
 
-// ── Terminal output line ────────────────────────────────────────────
-function TerminalLine({ text, color }: { text: string; color: string }) {
-  const { displayed, done } = useTypewriter(text, 22);
+function OutputPreview({ text }: { text: string }) {
+  const { displayed, done } = useTypewriter(text, 12);
 
   return (
-    <div className="font-mono text-sm text-slate-300 leading-relaxed">
+    <div className="font-mono text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
       {displayed}
       {!done && (
         <span className="inline-block w-2 h-4 bg-indigo-400 ml-0.5 animate-blink align-text-bottom" />
@@ -77,30 +114,23 @@ function TerminalLine({ text, color }: { text: string; color: string }) {
   );
 }
 
-export default function AIInsights() {
-  const [activeInsight, setActiveInsight] = useState(0);
-  const [messageIdx, setMessageIdx] = useState(0);
+export default function AIEngine() {
+  const [activeExample, setActiveExample] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-100px' });
+  const inView = useInView(ref, { once: true, margin: '-80px' });
 
-  // Auto-cycle insights every 6 seconds
   useEffect(() => {
     if (!inView) return;
     const interval = setInterval(() => {
-      setActiveInsight((prev) => {
-        const next = (prev + 1) % insights.length;
-        setMessageIdx(0);
-        return next;
-      });
-    }, 6000);
+      setActiveExample((prev) => (prev + 1) % examples.length);
+    }, 10000);
     return () => clearInterval(interval);
   }, [inView]);
 
-  const current = insights[activeInsight];
-  const currentMessage = current.messages[messageIdx];
+  const current = examples[activeExample];
 
   return (
-    <section className="bg-[#08080F] py-28 px-6 overflow-hidden">
+    <section id="ai-engine" className="bg-[#08080F] py-28 px-6 overflow-hidden">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <motion.div
@@ -110,16 +140,17 @@ export default function AIInsights() {
           transition={{ duration: 0.6 }}
           className="text-center mb-16"
         >
-          <p className="font-body text-xs font-semibold uppercase tracking-[0.2em] text-indigo-400 mb-4">
-            AI Intelligence
+          <p className="font-body text-xs font-semibold uppercase tracking-[0.2em] text-amber-400 mb-4">
+            AI Engine
           </p>
-          <h2 className="font-display font-extrabold text-[clamp(2rem,5vw,3.5rem)] text-white leading-tight tracking-tight">
-            AI that thinks like your CMO
+          <h2 className="font-display font-extrabold text-[clamp(2rem,5vw,3.5rem)] text-white leading-tight tracking-tight mb-4">
+            AI that actually
             <br />
-            <span className="text-gradient">acts like your analyst</span>
+            <span className="text-gradient">does the work</span>
           </h2>
-          <p className="font-body text-slate-400 mt-4 max-w-lg mx-auto text-base">
-            Real-time insights generated from your actual data. Not templates — strategic analysis.
+          <p className="font-body text-base text-slate-400 max-w-lg mx-auto">
+            Not templates. Not suggestions. Real outputs you can use immediately —
+            ad copy, scripts, reports, and more.
           </p>
         </motion.div>
 
@@ -128,17 +159,17 @@ export default function AIInsights() {
           initial={{ opacity: 0, y: 40 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          className="grid md:grid-cols-[280px_1fr] gap-6"
+          className="grid md:grid-cols-[240px_1fr] gap-6"
         >
-          {/* Category selector */}
-          <div className="flex flex-col gap-2">
-            {insights.map((ins, i) => (
+          {/* Example selector */}
+          <div className="flex md:flex-col gap-2">
+            {examples.map((ex, i) => (
               <motion.button
-                key={ins.category}
-                onClick={() => { setActiveInsight(i); setMessageIdx(0); }}
+                key={ex.label}
+                onClick={() => setActiveExample(i)}
                 whileHover={{ x: 4 }}
-                className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-left transition-all duration-200 ${
-                  activeInsight === i
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 w-full ${
+                  activeExample === i
                     ? 'bg-white/5 border border-white/10'
                     : 'hover:bg-white/3 border border-transparent'
                 }`}
@@ -146,19 +177,21 @@ export default function AIInsights() {
                 <div
                   className="w-2 h-2 rounded-full shrink-0 transition-all"
                   style={{
-                    background: ins.color,
-                    boxShadow: activeInsight === i ? `0 0 8px ${ins.color}` : 'none',
+                    background: ex.color,
+                    boxShadow: activeExample === i ? `0 0 8px ${ex.color}` : 'none',
                   }}
                 />
-                <span className="font-body text-sm font-medium text-slate-300">{ins.category}</span>
-                {activeInsight === i && (
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-500 ml-auto" />
-                )}
+                <span className="font-body text-sm font-medium text-slate-300 hidden md:inline">
+                  {ex.label}
+                </span>
+                <span className="font-body text-xs font-medium text-slate-300 md:hidden">
+                  {ex.label}
+                </span>
               </motion.button>
             ))}
           </div>
 
-          {/* Terminal window */}
+          {/* Output window */}
           <div
             className="rounded-2xl overflow-hidden"
             style={{
@@ -176,48 +209,40 @@ export default function AIInsights() {
               </div>
               <div className="flex items-center gap-2 ml-3">
                 <Brain className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="font-mono text-xs text-slate-500">syntra-ai — insights engine</span>
+                <span className="font-mono text-xs text-slate-500">
+                  syntra-ai — {current.label.toLowerCase()}
+                </span>
               </div>
             </div>
 
             {/* Terminal body */}
-            <div className="p-6 space-y-4 min-h-[200px]">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-xs text-indigo-400">$</span>
-                <span className="font-mono text-xs text-slate-500">
-                  analyze --account=client_001 --category="{current.category.toLowerCase()}"
+            <div className="p-6 space-y-4 min-h-[280px] max-h-[420px] overflow-y-auto">
+              {/* Prompt */}
+              <div className="flex items-start gap-2">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400 mt-0.5 shrink-0" />
+                <span className="font-mono text-xs text-slate-500 leading-relaxed">
+                  {current.prompt}
                 </span>
               </div>
 
+              {/* Output */}
               <div className="flex gap-3">
                 <div
                   className="w-1 self-stretch rounded-full shrink-0"
                   style={{ background: current.color }}
                 />
-                <div className="space-y-1">
-                  <p className="font-mono text-xs font-semibold uppercase tracking-wider" style={{ color: current.color }}>
-                    [{current.category}]
-                  </p>
-                  <motion.div key={`${activeInsight}-${messageIdx}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                    <TerminalLine text={currentMessage} color={current.color} />
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={activeExample}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <OutputPreview text={current.output} />
                   </motion.div>
-                </div>
+                </AnimatePresence>
               </div>
-
-              {/* Message selector dots */}
-              {current.messages.length > 1 && (
-                <div className="flex gap-2 pt-2">
-                  {current.messages.map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setMessageIdx(i)}
-                      className={`w-1.5 h-1.5 rounded-full transition-all ${
-                        messageIdx === i ? 'bg-indigo-400' : 'bg-white/15'
-                      }`}
-                    />
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         </motion.div>

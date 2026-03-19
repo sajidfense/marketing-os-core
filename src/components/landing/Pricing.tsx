@@ -10,14 +10,17 @@ const plans = [
     id: 'starter',
     name: 'Starter',
     price: { monthly: 97, annual: 79 },
-    description: 'For freelancers and solo operators managing 1–3 client accounts.',
+    description: 'For freelancers and solo operators managing 1-3 client accounts.',
     badge: null,
     accent: '#6366F1',
+    credits: '500',
     features: [
+      '500 AI credits / month',
       'Up to 3 connected accounts',
       'Monthly AI reports',
       'Core Web Vitals & SEO audit',
       'Campaign performance tracking',
+      'Content calendar',
       'Email support',
     ],
   },
@@ -28,12 +31,15 @@ const plans = [
     description: 'For growing agencies ready to scale client reporting and retention.',
     badge: 'Most Popular',
     accent: '#22D3EE',
+    credits: '2,000',
     features: [
+      '2,000 AI credits / month',
       'Up to 15 connected accounts',
       'Weekly AI reports (automated)',
       'White-label PDF exports',
-      'Advanced budget optimization',
+      'Advanced budget optimisation',
       'Creative fatigue detection',
+      'Campaign planner & roadmap',
       'Priority support',
       'Custom branding & domain',
     ],
@@ -45,12 +51,15 @@ const plans = [
     description: 'For established agencies with high-volume reporting requirements.',
     badge: null,
     accent: '#34D399',
+    credits: '10,000',
     features: [
+      '10,000 AI credits / month',
       'Unlimited connected accounts',
       'Daily AI reports (automated)',
       'Multi-org white-label',
       'API access',
       'Advanced analytics & attribution',
+      'Full AI engine access',
       'Dedicated account manager',
       'Custom integrations',
       'SLA guarantee',
@@ -182,6 +191,20 @@ export default function Pricing() {
                 <div className="flex items-baseline gap-1">
                   <span className="font-display font-extrabold text-5xl text-white">${price}</span>
                   <span className="font-body text-slate-500 text-sm">/mo{annual ? ' · billed annually' : ''}</span>
+                </div>
+
+                {/* Credits highlight */}
+                <div
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg"
+                  style={{
+                    background: `${plan.accent}10`,
+                    border: `1px solid ${plan.accent}20`,
+                  }}
+                >
+                  <Zap className="w-3.5 h-3.5" style={{ color: plan.accent }} />
+                  <span className="font-body text-sm font-semibold" style={{ color: plan.accent }}>
+                    {plan.credits} AI credits / month
+                  </span>
                 </div>
 
                 {/* Features */}

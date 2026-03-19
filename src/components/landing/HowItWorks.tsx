@@ -1,127 +1,130 @@
 import { useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
-import { Share2, Cpu, FileText } from 'lucide-react';
+import { X, ArrowRight } from 'lucide-react';
 
-const steps = [
+const painPoints = [
   {
-    number: '01',
-    icon: Share2,
-    title: 'Connect Meta Ads',
-    description:
-      'OAuth in one click. Syntra OS syncs your campaigns, ad sets, creatives, and spend data in real-time — no spreadsheet exports, no copy-paste.',
-    accent: '#6366F1',
-    glowColor: 'rgba(99,102,241,0.15)',
+    tool: 'Notion',
+    pain: 'Strategy docs nobody reads',
+    color: '#F59E0B',
   },
   {
-    number: '02',
-    icon: Cpu,
-    title: 'AI Analyzes Performance',
-    description:
-      'Our AI engine processes every signal — ROAS trends, creative fatigue, audience decay, budget efficiency — and identifies what needs attention first.',
-    accent: '#22D3EE',
-    glowColor: 'rgba(34,211,238,0.15)',
+    tool: 'Google Sheets',
+    pain: 'Content calendars that break',
+    color: '#34D399',
   },
   {
-    number: '03',
-    icon: FileText,
-    title: 'Generate Executive Reports',
-    description:
-      'Board-ready PDFs, white-labeled with your brand. Strategic narrative, data visuals, and prioritized recommendations — delivered automatically.',
-    accent: '#34D399',
-    glowColor: 'rgba(52,211,153,0.15)',
+    tool: 'Meta Ads Manager',
+    pain: 'Scattered campaign data',
+    color: '#6366F1',
+  },
+  {
+    tool: 'SEMrush',
+    pain: 'Expensive audits, no action',
+    color: '#22D3EE',
+  },
+  {
+    tool: 'Canva',
+    pain: 'Assets everywhere',
+    color: '#EF4444',
+  },
+  {
+    tool: 'Slack / Email',
+    pain: 'Status updates lost in threads',
+    color: '#A78BFA',
   },
 ];
 
 const container = {
   hidden: {},
-  show: { transition: { staggerChildren: 0.18 } },
+  show: { transition: { staggerChildren: 0.08 } },
 };
 
 const cardVariant = {
-  hidden: { opacity: 0, y: 40 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1] } },
+  hidden: { opacity: 0, y: 24 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } },
 };
 
-export default function HowItWorks() {
+export default function ProblemSection() {
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-100px' });
+  const inView = useInView(ref, { once: true, margin: '-80px' });
 
   return (
-    <section id="how-it-works" className="bg-[#06060E] py-28 px-6">
-      <div className="max-w-6xl mx-auto">
+    <section className="bg-[#08080F] py-28 px-6 overflow-hidden">
+      <div className="max-w-5xl mx-auto">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-80px' }}
           transition={{ duration: 0.6 }}
-          className="text-center mb-20"
+          className="text-center mb-16"
         >
-          <p className="font-body text-xs font-semibold uppercase tracking-[0.2em] text-indigo-400 mb-4">
-            How it Works
+          <p className="font-body text-xs font-semibold uppercase tracking-[0.2em] text-red-400 mb-4">
+            The Problem
           </p>
-          <h2 className="font-display font-extrabold text-[clamp(2rem,5vw,3.5rem)] text-white leading-tight tracking-tight">
-            From raw data to boardroom
+          <h2 className="font-display font-extrabold text-[clamp(2rem,5vw,3.5rem)] text-white leading-tight tracking-tight mb-4">
+            Your marketing stack is
             <br />
-            <span className="text-gradient">in three steps</span>
+            <span className="text-gradient">held together by duct tape</span>
           </h2>
+          <p className="font-body text-base text-slate-400 max-w-xl mx-auto leading-relaxed">
+            Six tools. Zero alignment. No single source of truth between
+            strategy and execution.
+          </p>
         </motion.div>
 
-        {/* Steps */}
+        {/* Pain point grid */}
         <motion.div
           ref={ref}
           variants={container}
           initial="hidden"
           animate={inView ? 'show' : 'hidden'}
-          className="grid md:grid-cols-3 gap-8 relative"
+          className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-12"
         >
-          {/* Connecting line — desktop */}
-          <div className="hidden md:block absolute top-[52px] left-[calc(16.67%+16px)] right-[calc(16.67%+16px)] h-px bg-gradient-to-r from-indigo-500/40 via-cyan-500/40 to-green-500/40" />
-
-          {steps.map((step) => {
-            const Icon = step.icon;
-            return (
-              <motion.div
-                key={step.number}
-                variants={cardVariant}
-                className="glass-card rounded-2xl p-8 flex flex-col gap-5 group relative overflow-hidden"
-              >
-                {/* Background glow on hover */}
-                <div
-                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-2xl"
-                  style={{ background: `radial-gradient(circle at 50% 0%, ${step.glowColor}, transparent 60%)` }}
-                />
-
-                {/* Step number + icon */}
-                <div className="flex items-center gap-4">
-                  <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
-                    style={{ background: `${step.accent}18`, border: `1px solid ${step.accent}30` }}
-                  >
-                    <Icon className="w-5 h-5" style={{ color: step.accent }} />
-                  </div>
+          {painPoints.map((point) => (
+            <motion.div
+              key={point.tool}
+              variants={cardVariant}
+              className="glass-card rounded-2xl p-5 group relative overflow-hidden"
+            >
+              <div
+                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                style={{
+                  background: `radial-gradient(circle at 50% 0%, ${point.color}10, transparent 60%)`,
+                }}
+              />
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
                   <span
-                    className="font-display font-black text-4xl opacity-20 tracking-tighter select-none"
-                    style={{ color: step.accent }}
+                    className="font-body text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: point.color }}
                   >
-                    {step.number}
+                    {point.tool}
                   </span>
+                  <X className="w-3.5 h-3.5 text-red-500/40" />
                 </div>
+                <p className="font-body text-sm text-slate-400 leading-relaxed">
+                  {point.pain}
+                </p>
+              </div>
+            </motion.div>
+          ))}
+        </motion.div>
 
-                {/* Content */}
-                <div>
-                  <h3 className="font-display font-bold text-xl text-white mb-3">{step.title}</h3>
-                  <p className="font-body text-sm text-slate-400 leading-relaxed">{step.description}</p>
-                </div>
-
-                {/* Bottom accent line */}
-                <div
-                  className="absolute bottom-0 left-6 right-6 h-px opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                  style={{ background: `linear-gradient(90deg, transparent, ${step.accent}80, transparent)` }}
-                />
-              </motion.div>
-            );
-          })}
+        {/* Transition arrow */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.4, duration: 0.6 }}
+          className="flex flex-col items-center gap-3"
+        >
+          <div className="w-px h-12 bg-gradient-to-b from-red-500/30 via-indigo-500/30 to-cyan-500/30" />
+          <div className="flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold px-4 py-1.5 rounded-full font-body">
+            <ArrowRight className="w-3 h-3" />
+            There&apos;s a better way
+          </div>
         </motion.div>
       </div>
     </section>

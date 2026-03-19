@@ -23,7 +23,6 @@ export default function FinalCTA() {
         <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-indigo-500/30 to-transparent" />
       </div>
 
-      {/* Grid overlay */}
       <div className="absolute inset-0 grid-bg opacity-50 pointer-events-none" />
 
       <div className="relative z-10 max-w-3xl mx-auto text-center">
@@ -33,22 +32,19 @@ export default function FinalCTA() {
           viewport={{ once: true, margin: '-80px' }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         >
-          {/* Eyebrow */}
           <p className="font-body text-xs font-semibold uppercase tracking-[0.25em] text-indigo-400 mb-6">
-            Get Started Today
+            Ready?
           </p>
 
-          {/* Headline */}
           <h2 className="font-display font-extrabold text-[clamp(2.2rem,6vw,4.5rem)] text-white leading-[1.05] tracking-tight mb-6">
-            Start Your Free Trial
+            Stop juggling tools.
             <br />
-            <span className="text-gradient">Today</span>
+            <span className="text-gradient">Start running a system.</span>
           </h2>
 
-          {/* Sub */}
           <p className="font-body text-base text-slate-400 max-w-xl mx-auto mb-10 leading-relaxed">
-            Join performance-driven marketing teams using Syntra OS to turn ad data
-            into decisions that move the needle.
+            Plan, execute, and scale your marketing from one operating system.
+            Join teams that replaced their entire stack with Syntra OS.
           </p>
 
           {/* CTA Buttons */}
@@ -57,7 +53,7 @@ export default function FinalCTA() {
               to="/signup"
               className="group inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-body font-semibold text-base px-10 py-4 rounded-xl transition-all shadow-2xl shadow-indigo-600/30 hover:shadow-indigo-500/40"
             >
-              Start Free Trial
+              Get Started
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </Link>
             <Link

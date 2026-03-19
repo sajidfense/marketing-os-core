@@ -1,10 +1,13 @@
 import LandingNav from '@/components/landing/LandingNav';
 import Hero from '@/components/landing/Hero';
 import SocialProof from '@/components/landing/SocialProof';
-import HowItWorks from '@/components/landing/HowItWorks';
+import ProblemSection from '@/components/landing/HowItWorks';
+import SolutionSection from '@/components/landing/Dashboard3D';
 import Features from '@/components/landing/Features';
-import Dashboard3D from '@/components/landing/Dashboard3D';
-import AIInsights from '@/components/landing/AIInsights';
+import Timeline from '@/components/landing/Timeline';
+import AIEngine from '@/components/landing/AIInsights';
+import CreditSystem from '@/components/landing/CreditSystem';
+import Integrations from '@/components/landing/Integrations';
 import Pricing from '@/components/landing/Pricing';
 import FinalCTA from '@/components/landing/FinalCTA';
 
@@ -14,10 +17,13 @@ export default function Landing() {
       <LandingNav />
       <Hero />
       <SocialProof />
-      <HowItWorks />
+      <ProblemSection />
+      <SolutionSection />
       <Features />
-      <Dashboard3D />
-      <AIInsights />
+      <Timeline />
+      <AIEngine />
+      <CreditSystem />
+      <Integrations />
       <Pricing />
       <FinalCTA />
     </div>
