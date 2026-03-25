@@ -1,7 +1,20 @@
 import { supabase } from '../lib/supabase';
+import { getDecryptedKey } from './vault.service';
 
-const SEMRUSH_API_KEY = process.env.SEMRUSH_API_KEY ?? '';
 const SEMRUSH_BASE = 'https://api.semrush.com';
+
+/**
+ * Resolve SEMrush API key: vault (per-org) → env fallback → null.
+ * The vault key takes precedence so each org can use their own.
+ */
+async function resolveSemrushKey(organizationId: string): Promise<string | null> {
+  // 1. Check vault for org-specific key
+  const vaultKey = await getDecryptedKey(organizationId, 'semrush');
+  if (vaultKey) return vaultKey;
+
+  // 2. Fall back to global env var
+  return process.env.SEMRUSH_API_KEY || null;
+}
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -47,10 +60,11 @@ export async function fetchKeywords(
   if (cached?.data) return cached.data as unknown as KeywordResult[];
 
   let results: KeywordResult[];
+  const apiKey = await resolveSemrushKey(organizationId);
 
-  if (SEMRUSH_API_KEY) {
-    // Real API call
-    const url = `${SEMRUSH_BASE}/?type=phrase_related&key=${SEMRUSH_API_KEY}&phrase=${encodeURIComponent(keyword)}&database=${database}&export_columns=Ph,Nq,Cp,Co,Nr&display_limit=20`;
+  if (apiKey) {
+    // Real API call — key resolved from vault or env
+    const url = `${SEMRUSH_BASE}/?type=phrase_related&key=${apiKey}&phrase=${encodeURIComponent(keyword)}&database=${database}&export_columns=Ph,Nq,Cp,Co,Nr&display_limit=20`;
     const res = await fetch(url);
 
     if (!res.ok) throw new Error(`SEMrush API error: ${res.status}`);
@@ -107,9 +121,10 @@ export async function fetchDomainOverview(
   if (cached?.data) return cached.data as unknown as DomainOverview;
 
   let overview: DomainOverview;
+  const apiKey = await resolveSemrushKey(organizationId);
 
-  if (SEMRUSH_API_KEY) {
-    const url = `${SEMRUSH_BASE}/?type=domain_ranks&key=${SEMRUSH_API_KEY}&export_columns=Dn,Or,Ot,Oc,Ad,At&domain=${encodeURIComponent(domain)}&database=${database}`;
+  if (apiKey) {
+    const url = `${SEMRUSH_BASE}/?type=domain_ranks&key=${apiKey}&export_columns=Dn,Or,Ot,Oc,Ad,At&domain=${encodeURIComponent(domain)}&database=${database}`;
     const res = await fetch(url);
 
     if (!res.ok) throw new Error(`SEMrush API error: ${res.status}`);

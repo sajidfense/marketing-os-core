@@ -1,7 +1,16 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Building2, Palette, Share2, CreditCard, CheckCircle2, Zap, ArrowRight, ChevronLeft } from 'lucide-react';
+import {
+  Building2,
+  Palette,
+  Megaphone,
+  Target,
+  CheckCircle2,
+  Zap,
+  ArrowRight,
+  ChevronLeft,
+} from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrg } from '@/contexts/OrgContext';
 import { api, ApiError } from '@/services/api';
@@ -14,21 +23,19 @@ interface OnboardingResult {
   membership: { organization_id: string; user_id: string; role: string };
 }
 
-type Step = 'org' | 'branding' | 'meta' | 'plan' | 'complete';
+type Step = 'org' | 'campaign' | 'branding' | 'goals' | 'complete';
 
 const STEPS: { id: Step; label: string; icon: typeof Building2 }[] = [
   { id: 'org', label: 'Organization', icon: Building2 },
+  { id: 'campaign', label: 'First Campaign', icon: Megaphone },
   { id: 'branding', label: 'Branding', icon: Palette },
-  { id: 'meta', label: 'Connect Meta', icon: Share2 },
-  { id: 'plan', label: 'Choose Plan', icon: CreditCard },
+  { id: 'goals', label: 'Goals', icon: Target },
 ];
 
-const STEP_ORDER: Step[] = ['org', 'branding', 'meta', 'plan', 'complete'];
-
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+const STEP_ORDER: Step[] = ['org', 'campaign', 'branding', 'goals', 'complete'];
 
 // ── Step progress bar ─────────────────────────────────────────────────
-function StepIndicator({ current, orgId }: { current: Step; orgId: string }) {
+function StepIndicator({ current }: { current: Step }) {
   const activeIdx = STEP_ORDER.indexOf(current);
   return (
     <div className="flex items-center gap-0 mb-12">
@@ -100,6 +107,8 @@ function StepOrg({ onComplete }: { onComplete: (orgId: string, orgName: string) 
       }
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
+        // Already has org — skip ahead
+        await refresh();
         onComplete('', name);
         return;
       }
@@ -151,7 +160,120 @@ function StepOrg({ onComplete }: { onComplete: (orgId: string, orgName: string) 
   );
 }
 
-// ── Step 2: Branding ─────────────────────────────────────────────────
+// ── Step 2: First Campaign ────────────────────────────────────────────
+function StepCampaign({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
+  const [name, setName] = useState('');
+  const [type, setType] = useState('growth');
+  const [goal, setGoal] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const campaignTypes = [
+    { id: 'growth', label: 'Growth' },
+    { id: 'brand-awareness', label: 'Brand Awareness' },
+    { id: 'lead-generation', label: 'Lead Generation' },
+    { id: 'product-launch', label: 'Product Launch' },
+    { id: 'content-marketing', label: 'Content Marketing' },
+    { id: 'other', label: 'Other' },
+  ];
+
+  async function handleSave() {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      await api.post('/onboarding/steps/campaign', {
+        name: name.trim(),
+        type,
+        goal: goal.trim() || undefined,
+      });
+      toast.success('Campaign created');
+      onNext();
+    } catch {
+      toast.error('Failed to create campaign');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="font-display font-bold text-2xl text-white mb-2">Create your first campaign</h2>
+        <p className="font-body text-sm text-slate-400">
+          Start with a campaign to organize your marketing efforts. You can create more later.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <label className="font-body text-xs font-medium text-slate-400 uppercase tracking-wider block mb-2">
+            Campaign Name
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Q2 Growth Campaign"
+            autoFocus
+            className="w-full bg-white/4 border border-white/10 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 rounded-xl px-4 py-3.5 text-white font-body text-sm placeholder:text-slate-600 outline-none transition-all"
+          />
+        </div>
+
+        <div>
+          <label className="font-body text-xs font-medium text-slate-400 uppercase tracking-wider block mb-2">
+            Type
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {campaignTypes.map((ct) => (
+              <button
+                key={ct.id}
+                type="button"
+                onClick={() => setType(ct.id)}
+                className={`rounded-xl border px-3 py-2 text-xs font-medium transition-all ${
+                  type === ct.id
+                    ? 'border-indigo-500/50 bg-indigo-600/15 text-indigo-300'
+                    : 'border-white/8 text-slate-500 hover:text-white hover:border-white/15'
+                }`}
+              >
+                {ct.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="font-body text-xs font-medium text-slate-400 uppercase tracking-wider block mb-2">
+            Goal (optional)
+          </label>
+          <input
+            type="text"
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+            placeholder="e.g. Increase signups by 30%"
+            className="w-full bg-white/4 border border-white/10 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 rounded-xl px-4 py-3.5 text-white font-body text-sm placeholder:text-slate-600 outline-none transition-all"
+          />
+        </div>
+      </div>
+
+      <div className="flex gap-3 pt-2">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 px-5 py-3 rounded-xl font-body text-sm text-slate-400 hover:text-white border border-white/8 hover:border-white/15 transition-all"
+        >
+          <ChevronLeft className="w-4 h-4" /> Back
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving || !name.trim()}
+          className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-body font-semibold py-3 rounded-xl transition-all"
+        >
+          {saving ? 'Creating...' : 'Continue'} {!saving && <ArrowRight className="w-4 h-4" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Step 3: Branding ─────────────────────────────────────────────────
 function StepBranding({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
   const [primaryColor, setPrimaryColor] = useState('#6366F1');
   const [secondaryColor, setSecondaryColor] = useState('#22D3EE');
@@ -160,7 +282,10 @@ function StepBranding({ onNext, onBack }: { onNext: () => void; onBack: () => vo
   async function handleSave() {
     setSaving(true);
     try {
-      await api.post('/branding', { primary_color: primaryColor, secondary_color: secondaryColor });
+      await api.post('/onboarding/steps/branding', {
+        primary_color: primaryColor,
+        secondary_color: secondaryColor,
+      });
     } catch {
       // Non-critical — continue anyway
     } finally {
@@ -252,142 +377,74 @@ function StepBranding({ onNext, onBack }: { onNext: () => void; onBack: () => vo
   );
 }
 
-// ── Step 3: Meta connection ───────────────────────────────────────────
-function StepMeta({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="font-display font-bold text-2xl text-white mb-2">Connect Meta Ads</h2>
-        <p className="font-body text-sm text-slate-400">
-          Authorize Syntra OS to pull your campaign data. Read-only access — we never modify your ads.
-        </p>
-      </div>
-
-      {/* Meta card */}
-      <div className="rounded-2xl border border-white/8 bg-white/3 p-6 space-y-4">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-[#1877F2]/15 border border-[#1877F2]/25 flex items-center justify-center">
-            <svg className="w-8 h-8" viewBox="0 0 24 24" fill="#1877F2">
-              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-            </svg>
-          </div>
-          <div>
-            <p className="font-body font-semibold text-white">Meta Business Suite</p>
-            <p className="font-body text-sm text-slate-400">Facebook & Instagram Ads</p>
-          </div>
-        </div>
-        <ul className="space-y-2">
-          {[
-            'Read campaign performance data',
-            'Access ad set and creative metrics',
-            'View audience insights',
-          ].map((p) => (
-            <li key={p} className="flex items-center gap-2 font-body text-sm text-slate-400">
-              <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
-              {p}
-            </li>
-          ))}
-        </ul>
-        <a
-          href={`${API_URL}/meta/oauth/start`}
-          className="flex items-center justify-center gap-2 w-full bg-[#1877F2] hover:bg-[#1461c7] text-white font-body font-semibold py-3.5 rounded-xl transition-colors"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-          </svg>
-          Connect with Facebook
-        </a>
-      </div>
-
-      <div className="flex gap-3">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 px-5 py-3 rounded-xl font-body text-sm text-slate-400 hover:text-white border border-white/8 hover:border-white/15 transition-all"
-        >
-          <ChevronLeft className="w-4 h-4" /> Back
-        </button>
-        <button
-          onClick={onNext}
-          className="flex-1 flex items-center justify-center gap-2 bg-white/6 hover:bg-white/10 text-white font-body font-medium py-3 rounded-xl border border-white/10 transition-all"
-        >
-          Skip for now
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Step 4: Plan selection ────────────────────────────────────────────
-const MINI_PLANS = [
-  { id: 'starter', name: 'Starter', price: 97, features: ['3 accounts', 'Monthly reports', 'SEO audit'] },
-  { id: 'pro', name: 'Pro', price: 247, badge: 'Popular', features: ['15 accounts', 'Weekly reports', 'White-label PDFs'] },
-  { id: 'agency', name: 'Agency', price: 597, features: ['Unlimited accounts', 'Daily reports', 'API access'] },
+// ── Step 4: Goals (optional) ──────────────────────────────────────────
+const GOAL_OPTIONS = [
+  'Increase brand awareness',
+  'Generate more leads',
+  'Grow social media following',
+  'Improve SEO rankings',
+  'Launch a product or service',
+  'Increase email subscribers',
+  'Boost paid ad ROI',
+  'Create content at scale',
 ];
 
-function StepPlan({ onBack, onComplete }: { onBack: () => void; onComplete: () => void }) {
-  const [loading, setLoading] = useState<string | null>(null);
+function StepGoals({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
+  const [selected, setSelected] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
 
-  async function handleSelect(planId: string) {
-    setLoading(planId);
+  function toggle(goal: string) {
+    setSelected((prev) =>
+      prev.includes(goal) ? prev.filter((g) => g !== goal) : [...prev, goal]
+    );
+  }
+
+  async function handleSave() {
+    if (selected.length === 0) {
+      onNext();
+      return;
+    }
+    setSaving(true);
     try {
-      const res = await api.post<ApiResponse<{ url: string }>>('/billing/create-checkout-session', {
-        plan_id: planId,
-      });
-      if (res.data?.url) {
-        window.location.href = res.data.url;
-      } else {
-        throw new Error('No checkout URL');
-      }
+      await api.post('/onboarding/steps/goals', { goals: selected });
     } catch {
-      toast.error('Failed to start checkout. Please try again.');
-      setLoading(null);
+      // Non-critical
+    } finally {
+      setSaving(false);
+      onNext();
     }
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div>
-        <h2 className="font-display font-bold text-2xl text-white mb-2">Choose your plan</h2>
+        <h2 className="font-display font-bold text-2xl text-white mb-2">What are your goals?</h2>
         <p className="font-body text-sm text-slate-400">
-          14-day free trial on all plans. Cancel anytime.
+          Select your top priorities. We'll tailor your experience accordingly.
         </p>
       </div>
 
-      <div className="space-y-3">
-        {MINI_PLANS.map((plan) => (
-          <motion.div
-            key={plan.id}
-            whileHover={{ scale: 1.01 }}
-            className={`relative rounded-xl p-4 flex items-center justify-between cursor-pointer border transition-all ${
-              plan.badge
-                ? 'border-indigo-500/40 bg-indigo-600/8'
-                : 'border-white/8 bg-white/3 hover:border-white/15'
-            }`}
-            onClick={() => handleSelect(plan.id)}
-          >
-            {plan.badge && (
-              <div className="absolute -top-3 right-4 bg-indigo-600 text-white text-[10px] font-semibold font-body px-2.5 py-0.5 rounded-full">
-                {plan.badge}
+      <div className="grid grid-cols-2 gap-2">
+        {GOAL_OPTIONS.map((goal) => {
+          const isSelected = selected.includes(goal);
+          return (
+            <button
+              key={goal}
+              type="button"
+              onClick={() => toggle(goal)}
+              className={`text-left rounded-xl border px-3.5 py-3 text-xs font-medium transition-all ${
+                isSelected
+                  ? 'border-indigo-500/50 bg-indigo-600/15 text-indigo-300'
+                  : 'border-white/8 text-slate-500 hover:text-white hover:border-white/15'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400 shrink-0" />}
+                <span>{goal}</span>
               </div>
-            )}
-            <div>
-              <p className="font-display font-bold text-white">{plan.name}</p>
-              <p className="font-body text-xs text-slate-500">{plan.features.join(' · ')}</p>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <p className="font-display font-bold text-xl text-white">${plan.price}</p>
-                <p className="font-body text-xs text-slate-500">/mo</p>
-              </div>
-              <button
-                disabled={loading === plan.id}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white font-body text-sm font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
-              >
-                {loading === plan.id ? '...' : 'Select'}
-              </button>
-            </div>
-          </motion.div>
-        ))}
+            </button>
+          );
+        })}
       </div>
 
       <div className="flex gap-3 pt-2">
@@ -398,10 +455,12 @@ function StepPlan({ onBack, onComplete }: { onBack: () => void; onComplete: () =
           <ChevronLeft className="w-4 h-4" /> Back
         </button>
         <button
-          onClick={onComplete}
-          className="flex-1 flex items-center justify-center gap-2 text-slate-500 hover:text-white font-body text-sm py-3 transition-colors"
+          onClick={handleSave}
+          disabled={saving}
+          className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-body font-semibold py-3 rounded-xl transition-all"
         >
-          Skip — I'll choose later
+          {saving ? 'Saving...' : selected.length > 0 ? 'Continue' : 'Skip'}
+          {!saving && <ArrowRight className="w-4 h-4" />}
         </button>
       </div>
     </div>
@@ -424,11 +483,11 @@ function StepComplete({ orgName }: { orgName: string }) {
       </div>
       <div>
         <h2 className="font-display font-bold text-2xl text-white mb-2">
-          Your AI Marketing OS is ready
+          You're all set
         </h2>
         <p className="font-body text-sm text-slate-400">
-          <span className="text-white font-medium">{orgName}</span> is all set.
-          Connect Meta Ads and generate your first AI report in minutes.
+          <span className="text-white font-medium">{orgName}</span> is ready to go.
+          Your first campaign is waiting on the dashboard.
         </p>
       </div>
       <div className="flex flex-col gap-3">
@@ -450,7 +509,6 @@ export default function Onboarding() {
   const [orgName, setOrgName] = useState('');
 
   const stepIdx = STEP_ORDER.indexOf(step);
-  const dir = 1;
 
   function goNext() {
     const next = STEP_ORDER[stepIdx + 1];
@@ -492,7 +550,7 @@ export default function Onboarding() {
         }}
       >
         {/* Step indicator (not shown on complete screen) */}
-        {step !== 'complete' && <StepIndicator current={step} orgId={orgId} />}
+        {step !== 'complete' && <StepIndicator current={step} />}
 
         {/* Animated step content */}
         <AnimatePresence mode="wait">
@@ -513,9 +571,9 @@ export default function Onboarding() {
                 }}
               />
             )}
+            {step === 'campaign' && <StepCampaign onNext={goNext} onBack={goBack} />}
             {step === 'branding' && <StepBranding onNext={goNext} onBack={goBack} />}
-            {step === 'meta' && <StepMeta onNext={goNext} onBack={goBack} />}
-            {step === 'plan' && <StepPlan onBack={goBack} onComplete={goNext} />}
+            {step === 'goals' && <StepGoals onNext={goNext} onBack={goBack} />}
             {step === 'complete' && <StepComplete orgName={orgName} />}
           </motion.div>
         </AnimatePresence>

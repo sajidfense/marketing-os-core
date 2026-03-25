@@ -1,4 +1,4 @@
-import { useState, useMemo, type FormEvent } from 'react';
+import { useState, useMemo, useEffect, useCallback, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CalendarRange,
@@ -12,14 +12,18 @@ import {
   MessageSquare,
   Sparkles,
 } from 'lucide-react';
+import { EmptyState } from '@/components/shared/EmptyState';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { api } from '@/services/api';
+import type { ApiResponse } from '@/types';
 
 type ContentType = 'blog' | 'social' | 'video' | 'email';
 
@@ -29,6 +33,28 @@ interface ContentItem {
   type: ContentType;
   status: 'draft' | 'scheduled' | 'published';
   day: number; // day of month
+}
+
+interface ApiContentItem {
+  id: string;
+  title: string;
+  content_type: ContentType;
+  status: 'draft' | 'scheduled' | 'published';
+  scheduled_day: number;
+  scheduled_month: number;
+  scheduled_year: number;
+  created_at: string;
+  updated_at: string;
+}
+
+function mapApiItem(item: ApiContentItem): ContentItem {
+  return {
+    id: item.id,
+    title: item.title,
+    type: item.content_type,
+    status: item.status,
+    day: item.scheduled_day,
+  };
 }
 
 const typeConfig: Record<ContentType, { icon: typeof FileText; color: string; label: string }> = {
@@ -47,24 +73,10 @@ const statusVariant: Record<string, 'success' | 'default' | 'secondary'> = {
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-const initialContent: ContentItem[] = [
-  { id: '1', title: 'Product Launch Blog', type: 'blog', status: 'published', day: 3 },
-  { id: '2', title: 'Instagram Carousel', type: 'social', status: 'published', day: 5 },
-  { id: '3', title: 'Demo Video', type: 'video', status: 'scheduled', day: 8 },
-  { id: '4', title: 'Newsletter #12', type: 'email', status: 'scheduled', day: 10 },
-  { id: '5', title: 'Case Study Post', type: 'blog', status: 'draft', day: 12 },
-  { id: '6', title: 'TikTok Tutorial', type: 'video', status: 'draft', day: 14 },
-  { id: '7', title: 'LinkedIn Article', type: 'social', status: 'scheduled', day: 17 },
-  { id: '8', title: 'SEO Blog Post', type: 'blog', status: 'draft', day: 19 },
-  { id: '9', title: 'Reels - BTS', type: 'video', status: 'draft', day: 22 },
-  { id: '10', title: 'Twitter Thread', type: 'social', status: 'scheduled', day: 24 },
-  { id: '11', title: 'Product Update Email', type: 'email', status: 'draft', day: 26 },
-  { id: '12', title: 'Month Recap Blog', type: 'blog', status: 'draft', day: 28 },
-];
-
 export default function ContentCalendar() {
   const navigate = useNavigate();
-  const [content, setContent] = useState<ContentItem[]>(initialContent);
+  const [content, setContent] = useState<ContentItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
@@ -77,6 +89,31 @@ export default function ContentCalendar() {
 
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const firstDayOfWeek = (new Date(currentYear, currentMonth, 1).getDay() + 6) % 7; // Mon=0
+
+  const fetchContent = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await api.get<ApiResponse<ApiContentItem[]>>('/content-items');
+      if (res.success && res.data) {
+        const filtered = res.data
+          .filter(
+            (item) =>
+              item.scheduled_month === currentMonth &&
+              item.scheduled_year === currentYear,
+          )
+          .map(mapApiItem);
+        setContent(filtered);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load content items');
+    } finally {
+      setLoading(false);
+    }
+  }, [currentMonth, currentYear]);
+
+  useEffect(() => {
+    fetchContent();
+  }, [fetchContent]);
 
   const calendarDays = useMemo(() => {
     const days: (number | null)[] = [];
@@ -113,27 +150,34 @@ export default function ContentCalendar() {
     draft: content.filter((c) => c.status === 'draft').length,
   }), [content]);
 
-  function handleAdd(e: FormEvent) {
+  async function handleAdd(e: FormEvent) {
     e.preventDefault();
     const dayNum = parseInt(addDay, 10);
     if (isNaN(dayNum) || dayNum < 1 || dayNum > daysInMonth) {
       toast.error(`Day must be between 1 and ${daysInMonth}`);
       return;
     }
-    const newItem: ContentItem = {
-      id: String(Date.now()),
-      title: addTitle,
-      type: addType,
-      status: addStatus,
-      day: dayNum,
-    };
-    setContent((prev) => [...prev, newItem]);
-    setShowAdd(false);
-    setAddTitle('');
-    setAddDay('');
-    setAddType('blog');
-    setAddStatus('draft');
-    toast.success('Content added to calendar');
+    try {
+      const res = await api.post<ApiResponse<ApiContentItem>>('/content-items', {
+        title: addTitle,
+        content_type: addType,
+        status: addStatus,
+        scheduled_day: dayNum,
+        scheduled_month: currentMonth,
+        scheduled_year: currentYear,
+      });
+      if (res.success && res.data) {
+        setContent((prev) => [...prev, mapApiItem(res.data!)]);
+      }
+      setShowAdd(false);
+      setAddTitle('');
+      setAddDay('');
+      setAddType('blog');
+      setAddStatus('draft');
+      toast.success('Content added to calendar');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create content item');
+    }
   }
 
   function openAddForDay(day: number) {
@@ -231,22 +275,61 @@ export default function ContentCalendar() {
         </form>
       </Dialog>
 
-      {/* Stats */}
-      <div className="grid gap-3 sm:grid-cols-4">
-        {[
-          { label: 'Total', value: stats.total, color: '#6366F1' },
-          { label: 'Published', value: stats.published, color: '#22C55E' },
-          { label: 'Scheduled', value: stats.scheduled, color: '#3B82F6' },
-          { label: 'Drafts', value: stats.draft, color: '#64748B' },
-        ].map((s) => (
-          <Card key={s.label} className="p-4">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{s.label}</p>
-            <p className="text-xl font-bold tabular-nums mt-0.5" style={{ color: s.color }}>{s.value}</p>
-          </Card>
-        ))}
-      </div>
+      {/* Loading state */}
+      {loading && (
+        <div className="space-y-6">
+          <div className="grid gap-3 sm:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Card key={i} className="p-4 space-y-2">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-6 w-10" />
+              </Card>
+            ))}
+          </div>
+          <div className="grid gap-6 lg:grid-cols-4">
+            <Card className="lg:col-span-3 p-4">
+              <div className="grid grid-cols-7 gap-1">
+                {Array.from({ length: 35 }).map((_, i) => (
+                  <Skeleton key={i} className="h-[72px] rounded-lg" />
+                ))}
+              </div>
+            </Card>
+            <div className="space-y-3">
+              <Skeleton className="h-5 w-24" />
+              <Skeleton className="h-32 rounded-lg" />
+            </div>
+          </div>
+        </div>
+      )}
 
-      <div className="grid gap-6 lg:grid-cols-4">
+      {!loading && content.length === 0 && (
+        <EmptyState
+          icon={CalendarRange}
+          title="No content yet"
+          description="Create your first post to start building your content calendar."
+          actionLabel="New Content"
+          onAction={() => setShowAdd(true)}
+        />
+      )}
+
+      {/* Stats */}
+      {!loading && content.length > 0 && (
+        <>
+        <div className="grid gap-3 sm:grid-cols-4">
+          {[
+            { label: 'Total', value: stats.total, color: '#6366F1' },
+            { label: 'Published', value: stats.published, color: '#22C55E' },
+            { label: 'Scheduled', value: stats.scheduled, color: '#3B82F6' },
+            { label: 'Drafts', value: stats.draft, color: '#64748B' },
+          ].map((s) => (
+            <Card key={s.label} className="p-4">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{s.label}</p>
+              <p className="text-xl font-bold tabular-nums mt-0.5" style={{ color: s.color }}>{s.value}</p>
+            </Card>
+          ))}
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-4">
         {/* Calendar */}
         <Card className="lg:col-span-3">
           <div className="flex items-center justify-between p-4 border-b border-border/50">
@@ -375,6 +458,8 @@ export default function ContentCalendar() {
           )}
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

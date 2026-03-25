@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import { asyncHandler } from '../lib/asyncHandler';
 import {
   getGoogleAuthUrl,
   exchangeCodeForTokens,
@@ -13,6 +14,12 @@ import {
   fetchKeywords,
   fetchDomainOverview,
 } from '../services/semrush.service';
+import {
+  saveIntegrationKey,
+  getIntegrationStatuses,
+  deleteIntegrationKey,
+  type Provider,
+} from '../services/vault.service';
 
 export const integrationsRouter = Router();
 
@@ -66,7 +73,7 @@ integrationsRouter.get('/google/callback', async (req: Request, res: Response) =
 });
 
 // ── Status ────────────────────────────────────────────────────────
-integrationsRouter.get('/google/status', async (req: Request, res: Response) => {
+integrationsRouter.get('/google/status', asyncHandler(async (req: Request, res: Response) => {
   const integration = await getGoogleIntegration(req.organizationId!);
   res.json({
     success: true,
@@ -76,25 +83,25 @@ integrationsRouter.get('/google/status', async (req: Request, res: Response) => 
       connectedAt: integration?.created_at ?? null,
     },
   });
-});
+}));
 
 // ── Disconnect ────────────────────────────────────────────────────
-integrationsRouter.post('/google/disconnect', async (req: Request, res: Response) => {
+integrationsRouter.post('/google/disconnect', asyncHandler(async (req: Request, res: Response) => {
   await disconnectGoogle(req.organizationId!);
   res.json({ success: true });
-});
+}));
 
 // ── Campaigns ─────────────────────────────────────────────────────
-integrationsRouter.get('/google/campaigns', async (req: Request, res: Response) => {
+integrationsRouter.get('/google/campaigns', asyncHandler(async (req: Request, res: Response) => {
   const campaigns = await fetchGoogleAdsCampaigns(req.organizationId!);
   res.json({ success: true, data: campaigns });
-});
+}));
 
 // ── Overview ──────────────────────────────────────────────────────
-integrationsRouter.get('/google/overview', async (req: Request, res: Response) => {
+integrationsRouter.get('/google/overview', asyncHandler(async (req: Request, res: Response) => {
   const overview = await fetchGoogleAdsOverview(req.organizationId!);
   res.json({ success: true, data: overview });
-});
+}));
 
 // ═══════════════════════════════════════════════════════════════════
 // SEMRUSH
@@ -135,22 +142,96 @@ integrationsRouter.get('/semrush/domain-overview', async (req: Request, res: Res
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// STATUS (all integrations)
+// INTEGRATIONS VAULT — Encrypted API Key Management
+// ═══════════════════════════════════════════════════════════════════
+
+const VALID_PROVIDERS: Provider[] = ['semrush', 'google_ads', 'openai'];
+
+const saveKeySchema = z.object({
+  provider: z.enum(['semrush', 'google_ads', 'openai']),
+  api_key: z.string().min(1, 'API key is required').max(500, 'API key too long'),
+});
+
+// ── Save API key (encrypt + upsert) ──────────────────────────────
+integrationsRouter.post('/vault/save', async (req: Request, res: Response) => {
+  try {
+    const parsed = saveKeySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(422).json({
+        error: 'Validation failed',
+        details: parsed.error.flatten().fieldErrors,
+      });
+      return;
+    }
+
+    const { provider, api_key } = parsed.data;
+
+    await saveIntegrationKey(req.organizationId!, provider, api_key);
+
+    res.json({ success: true, message: `${provider} API key saved securely` });
+  } catch (err) {
+    console.error('[vault/save] Error:', err);
+    res.status(500).json({ error: 'Failed to save API key' });
+  }
+});
+
+// ── Vault status (connected / not connected — NO keys returned) ──
+integrationsRouter.get('/vault/status', async (req: Request, res: Response) => {
+  try {
+    const statuses = await getIntegrationStatuses(req.organizationId!);
+    res.json({ success: true, data: statuses });
+  } catch (err) {
+    console.error('[vault/status] Error:', err);
+    res.status(500).json({ error: 'Failed to load integration statuses' });
+  }
+});
+
+// ── Delete an integration key ────────────────────────────────────
+integrationsRouter.delete('/vault/:provider', async (req: Request, res: Response) => {
+  try {
+    const provider = req.params.provider as Provider;
+    if (!VALID_PROVIDERS.includes(provider)) {
+      res.status(400).json({ error: `Invalid provider: ${provider}` });
+      return;
+    }
+
+    await deleteIntegrationKey(req.organizationId!, provider);
+    res.json({ success: true, message: `${provider} integration disconnected` });
+  } catch (err) {
+    console.error('[vault/delete] Error:', err);
+    res.status(500).json({ error: 'Failed to disconnect integration' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// STATUS (all integrations — combined legacy + vault)
 // ═══════════════════════════════════════════════════════════════════
 
 integrationsRouter.get('/status', async (req: Request, res: Response) => {
-  const google = await getGoogleIntegration(req.organizationId!);
+  try {
+    const [google, vaultStatuses] = await Promise.all([
+      getGoogleIntegration(req.organizationId!),
+      getIntegrationStatuses(req.organizationId!),
+    ]);
 
-  res.json({
-    success: true,
-    data: {
-      google: {
-        connected: !!google?.is_active,
-        connectedAt: google?.created_at ?? null,
+    // Build vault status map
+    const vault: Record<string, { connected: boolean; connectedAt: string | null }> = {};
+    for (const s of vaultStatuses) {
+      vault[s.provider] = { connected: s.connected, connectedAt: s.connectedAt };
+    }
+
+    res.json({
+      success: true,
+      data: {
+        google: {
+          connected: !!google?.is_active,
+          connectedAt: google?.created_at ?? null,
+        },
+        vault,
       },
-      semrush: {
-        connected: !!process.env.SEMRUSH_API_KEY,
-      },
-    },
-  });
+    });
+  } catch (err) {
+    console.error('[integrations/status] Error:', err);
+    res.status(500).json({ error: 'Failed to load integration statuses' });
+  }
 });

@@ -6,10 +6,6 @@ import {
   Download,
   Calendar,
   Clock,
-  TrendingUp,
-  DollarSign,
-  Eye,
-  MousePointerClick,
 } from 'lucide-react';
 import { api, ApiError } from '@/services/api';
 import { Button } from '@/components/ui/button';
@@ -32,57 +28,20 @@ interface Report {
   download_url?: string;
 }
 
-const statusBadge: Record<Report['status'], 'secondary' | 'default' | 'outline' | 'destructive' | 'warning'> = {
+const statusBadge: Record<Report['status'], 'secondary' | 'default' | 'outline' | 'destructive' | 'warning' | 'success'> = {
   pending: 'outline',
   generating: 'warning',
-  completed: 'success' as 'default',
+  completed: 'success',
   failed: 'destructive',
 };
 
 // ── Mini bar chart (SVG) ─────────────────────────────────────────────
-function MiniBarChart({ data, color, height = 80 }: { data: number[]; color: string; height?: number }) {
-  const max = Math.max(...data, 1);
-  const barW = 20;
-  const gap = 6;
-  const w = data.length * (barW + gap) - gap;
-
-  return (
-    <svg viewBox={`0 0 ${w} ${height}`} className="w-full" style={{ maxHeight: height }}>
-      {data.map((v, i) => {
-        const h = (v / max) * (height - 4);
-        return (
-          <rect
-            key={i}
-            x={i * (barW + gap)}
-            y={height - h}
-            width={barW}
-            height={h}
-            rx={4}
-            fill={i === data.length - 1 ? color : `${color}44`}
-          />
-        );
-      })}
-    </svg>
-  );
-}
-
-// ── KPI snapshot cards ───────────────────────────────────────────────
-const kpiData = [
-  { label: 'Total Spend', value: '$12,450', change: '+8.2%', up: true, icon: DollarSign, color: '#6366F1' },
-  { label: 'ROAS', value: '3.8x', change: '+12%', up: true, icon: TrendingUp, color: '#22C55E' },
-  { label: 'Impressions', value: '1.2M', change: '+18%', up: true, icon: Eye, color: '#22D3EE' },
-  { label: 'CTR', value: '2.4%', change: '-0.3%', up: false, icon: MousePointerClick, color: '#F59E0B' },
-];
-
-const mockBarData = [35, 42, 38, 55, 48, 62, 58];
-
 export default function Reports() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
-  const [timePeriod, setTimePeriod] = useState<'7d' | '30d' | '90d'>('30d');
 
   const fetchReports = async () => {
     try {
@@ -171,52 +130,6 @@ export default function Reports() {
           ) : undefined
         }
       />
-
-      {/* KPI Snapshot */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {kpiData.map((kpi) => {
-          const Icon = kpi.icon;
-          return (
-            <Card key={kpi.label} className="p-5">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{kpi.label}</span>
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ backgroundColor: `${kpi.color}15`, color: kpi.color }}>
-                  <Icon className="h-3.5 w-3.5" />
-                </div>
-              </div>
-              <p className="text-2xl font-bold tabular-nums">{kpi.value}</p>
-              <span className={`text-xs font-medium ${kpi.up ? 'text-emerald-400' : 'text-red-400'}`}>
-                {kpi.change}
-              </span>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Spend Trend Chart */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-base">Spend Trend</CardTitle>
-          <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
-            {(['7d', '30d', '90d'] as const).map((period) => (
-              <button
-                key={period}
-                onClick={() => setTimePeriod(period)}
-                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                  timePeriod === period
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {period}
-              </button>
-            ))}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <MiniBarChart data={mockBarData} color="#6366F1" height={120} />
-        </CardContent>
-      </Card>
 
       {/* Generate Report */}
       <Card>

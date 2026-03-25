@@ -107,20 +107,14 @@ export async function adminCreateOrganization(
   }
 }
 
-async function createOrgDefaults(orgId: string, plan: string, comped: boolean) {
-  // Create default branding
+async function createOrgDefaults(orgId: string, _plan: string, _comped: boolean) {
+  // Only initialize usage tracking — branding & subscription created during onboarding
   await supabase
-    .from('branding_settings')
-    .insert({ organization_id: orgId });
-
-  // Create subscription record
-  await supabase
-    .from('subscriptions')
-    .insert({
-      organization_id: orgId,
-      plan,
-      status: comped ? 'active' : 'active', // subscription row status
-    });
+    .from('organization_usage')
+    .upsert(
+      { organization_id: orgId, credits_used: 0, credits_limit: 100, period_start: new Date().toISOString() },
+      { onConflict: 'organization_id' },
+    );
 }
 
 // ── 2. Create User ────────────────────────────────────────────────
@@ -318,18 +312,13 @@ export async function adminProvisionClient(
       return res.status(500).json({ error: 'Failed to link user to organization' });
     }
 
-    // ── Step 4: Create defaults ──────────────────────────────────
+    // ── Step 4: Initialize usage tracking ────────────────────────
     await supabase
-      .from('branding_settings')
-      .insert({ organization_id: org.id });
-
-    await supabase
-      .from('subscriptions')
-      .insert({
-        organization_id: org.id,
-        plan,
-        status: 'active',
-      });
+      .from('organization_usage')
+      .upsert(
+        { organization_id: org.id, credits_used: 0, credits_limit: 100, period_start: new Date().toISOString() },
+        { onConflict: 'organization_id' },
+      );
 
     return res.status(201).json({
       success: true,

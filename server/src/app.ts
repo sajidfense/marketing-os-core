@@ -18,6 +18,13 @@ import { adminRouter } from './routes/admin.routes';
 import { dashboardRouter } from './routes/dashboard.routes';
 import { seoRouter } from './routes/seo.routes';
 import { integrationsRouter } from './routes/integrations.routes';
+import { onboardingStepsRouter } from './routes/onboarding.routes';
+import { leadsRouter } from './routes/leads.routes';
+import { contentItemsRouter } from './routes/content-items.routes';
+import { roadmapRouter } from './routes/roadmap.routes';
+import { creativeAssetsRouter } from './routes/creative-assets.routes';
+import { strategiesRouter } from './routes/strategies.routes';
+import { seoTasksRouter } from './routes/seo-tasks.routes';
 
 // Import middleware
 import { authMiddleware } from './middleware/auth.middleware';
@@ -93,6 +100,13 @@ api.use('/meta', metaRouter);
 api.use('/reports', reportsRouter);
 api.use('/seo', seoRouter);
 api.use('/integrations', integrationsRouter);
+api.use('/leads', leadsRouter);
+api.use('/content-items', contentItemsRouter);
+api.use('/roadmap', roadmapRouter);
+api.use('/creative-assets', creativeAssetsRouter);
+api.use('/strategies', strategiesRouter);
+api.use('/seo-tasks', seoTasksRouter);
+api.use('/onboarding/steps', onboardingStepsRouter);
 
 app.use('/api', api);
 

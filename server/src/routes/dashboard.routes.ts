@@ -1,9 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { supabase } from '../lib/supabase';
+import { asyncHandler } from '../lib/asyncHandler';
 
 export const dashboardRouter = Router();
 
-dashboardRouter.get('/stats', async (req: Request, res: Response): Promise<void> => {
+dashboardRouter.get('/stats', asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const orgId = req.organizationId;
 
   const [campaigns, bookings, workflows, aiGenerations] = await Promise.all([
@@ -22,4 +23,4 @@ dashboardRouter.get('/stats', async (req: Request, res: Response): Promise<void>
       aiGenerations: aiGenerations.count ?? 0,
     },
   });
-});
+}));

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import {
   Map,
   Plus,
@@ -20,9 +20,28 @@ import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { api, ApiError } from '@/services/api';
+import type { ApiResponse } from '@/types';
 
 type MilestoneStatus = 'completed' | 'in-progress' | 'planned' | 'at-risk';
 
+/** Shape returned by the API (matches roadmap_milestones table). */
+interface ApiMilestone {
+  id: string;
+  organization_id: string;
+  title: string;
+  description: string;
+  status: MilestoneStatus;
+  target_date: string;
+  linked_items: { label: string; type: 'campaign' | 'content' | 'seo' }[];
+  dependencies: string[];
+  sort_order: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Front-end model used by the UI. */
 interface Milestone {
   id: string;
   title: string;
@@ -33,80 +52,25 @@ interface Milestone {
   dependencies: string[];
 }
 
+/** Map an API row into the front-end Milestone shape. */
+function toMilestone(row: ApiMilestone): Milestone {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    date: row.target_date,
+    linkedItems: row.linked_items ?? [],
+    dependencies: row.dependencies ?? [],
+  };
+}
+
 const statusConfig: Record<MilestoneStatus, { label: string; icon: typeof CheckCircle2; color: string; badge: 'success' | 'default' | 'secondary' | 'warning' }> = {
   'completed': { label: 'Completed', icon: CheckCircle2, color: '#22C55E', badge: 'success' },
   'in-progress': { label: 'In Progress', icon: Clock, color: '#6366F1', badge: 'default' },
   'planned': { label: 'Planned', icon: Circle, color: '#64748B', badge: 'secondary' },
   'at-risk': { label: 'At Risk', icon: AlertCircle, color: '#F59E0B', badge: 'warning' },
 };
-
-const initialMilestones: Milestone[] = [
-  {
-    id: '1',
-    title: 'Brand Identity Finalized',
-    description: 'Complete brand guidelines, logo, and visual identity system.',
-    status: 'completed',
-    date: 'Jan 15',
-    linkedItems: [{ label: 'Brand Guidelines', type: 'content' }],
-    dependencies: [],
-  },
-  {
-    id: '2',
-    title: 'Website Launch',
-    description: 'Deploy new marketing website with SEO-optimized pages.',
-    status: 'completed',
-    date: 'Feb 1',
-    linkedItems: [
-      { label: 'SEO Audit', type: 'seo' },
-      { label: 'Landing Pages', type: 'content' },
-    ],
-    dependencies: ['1'],
-  },
-  {
-    id: '3',
-    title: 'Q1 Campaign Launch',
-    description: 'Launch multi-channel campaign across Google, Meta, and LinkedIn.',
-    status: 'in-progress',
-    date: 'Mar 1',
-    linkedItems: [
-      { label: 'Spring Campaign', type: 'campaign' },
-      { label: 'Ad Creatives', type: 'content' },
-    ],
-    dependencies: ['2'],
-  },
-  {
-    id: '4',
-    title: 'Content Engine Live',
-    description: 'Blog, social, and video content pipeline operational.',
-    status: 'in-progress',
-    date: 'Mar 15',
-    linkedItems: [
-      { label: 'Blog Calendar', type: 'content' },
-      { label: 'Social Strategy', type: 'campaign' },
-    ],
-    dependencies: ['2'],
-  },
-  {
-    id: '5',
-    title: 'Lead Gen System',
-    description: 'Complete lead capture, scoring, and handoff pipeline.',
-    status: 'planned',
-    date: 'Apr 1',
-    linkedItems: [
-      { label: 'Lead Forms', type: 'campaign' },
-    ],
-    dependencies: ['3'],
-  },
-  {
-    id: '6',
-    title: 'Q2 Strategy Review',
-    description: 'Performance review and Q2 planning with stakeholders.',
-    status: 'planned',
-    date: 'Apr 15',
-    linkedItems: [],
-    dependencies: ['3', '4', '5'],
-  },
-];
 
 const linkedTypeColors: Record<string, string> = {
   campaign: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
@@ -121,7 +85,8 @@ function TimelineConnector({ active }: { active: boolean }) {
 }
 
 export default function Roadmap() {
-  const [milestones, setMilestones] = useState<Milestone[]>(initialMilestones);
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<MilestoneStatus | 'all'>('all');
   const [showAdd, setShowAdd] = useState(false);
@@ -129,39 +94,86 @@ export default function Roadmap() {
   const [addDesc, setAddDesc] = useState('');
   const [addDate, setAddDate] = useState('');
   const [addStatus, setAddStatus] = useState<MilestoneStatus>('planned');
+  const [saving, setSaving] = useState(false);
+
+  const fetchMilestones = useCallback(async () => {
+    try {
+      const res = await api.get<ApiResponse<ApiMilestone[]>>('/roadmap');
+      setMilestones((res.data ?? []).map(toMilestone));
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to load milestones';
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMilestones();
+  }, [fetchMilestones]);
 
   const filtered = filter === 'all'
     ? milestones
     : milestones.filter((m) => m.status === filter);
 
   const completedCount = milestones.filter((m) => m.status === 'completed').length;
-  const progress = Math.round((completedCount / milestones.length) * 100);
+  const progress = milestones.length > 0 ? Math.round((completedCount / milestones.length) * 100) : 0;
 
-  function handleAdd(e: FormEvent) {
+  async function handleAdd(e: FormEvent) {
     e.preventDefault();
-    const newMilestone: Milestone = {
-      id: String(Date.now()),
-      title: addTitle,
-      description: addDesc,
-      status: addStatus,
-      date: addDate,
-      linkedItems: [],
-      dependencies: [],
-    };
-    setMilestones((prev) => [...prev, newMilestone]);
-    setShowAdd(false);
-    setAddTitle('');
-    setAddDesc('');
-    setAddDate('');
-    setAddStatus('planned');
-    toast.success('Milestone added');
+    setSaving(true);
+    try {
+      await api.post<ApiResponse<ApiMilestone>>('/roadmap', {
+        title: addTitle,
+        description: addDesc,
+        target_date: addDate,
+        status: addStatus,
+        linked_items: [],
+        dependencies: [],
+      });
+      setShowAdd(false);
+      setAddTitle('');
+      setAddDesc('');
+      setAddDate('');
+      setAddStatus('planned');
+      toast.success('Milestone added');
+      await fetchMilestones();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to add milestone';
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleStatusChange(id: string, newStatus: MilestoneStatus) {
+  async function handleStatusChange(id: string, newStatus: MilestoneStatus) {
+    // Optimistic update
     setMilestones((prev) =>
       prev.map((m) => (m.id === id ? { ...m, status: newStatus } : m))
     );
-    toast.success('Status updated');
+    try {
+      await api.patch<ApiResponse<ApiMilestone>>(`/roadmap/${id}`, { status: newStatus });
+      toast.success('Status updated');
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to update status';
+      toast.error(message);
+      // Revert on failure
+      await fetchMilestones();
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-8">
+        <PageHeader
+          title="Roadmap"
+          description="Marketing milestones and strategic timeline"
+        />
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -212,9 +224,9 @@ export default function Roadmap() {
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" size="sm" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button type="submit" size="sm" className="gap-2" disabled={!addTitle.trim() || !addDate.trim()}>
-              <Plus className="h-3.5 w-3.5" />
-              Add Milestone
+            <Button type="submit" size="sm" className="gap-2" disabled={!addTitle.trim() || !addDate.trim() || saving}>
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              {saving ? 'Adding...' : 'Add Milestone'}
             </Button>
           </div>
         </form>
@@ -384,10 +396,20 @@ export default function Roadmap() {
           <div className="mb-4 rounded-2xl bg-muted/50 p-4">
             <Map className="h-8 w-8 text-muted-foreground" />
           </div>
-          <h3 className="mb-1.5 text-base font-semibold">No milestones found</h3>
+          <h3 className="mb-1.5 text-base font-semibold">
+            {milestones.length === 0 ? 'No milestones yet' : 'No milestones found'}
+          </h3>
           <p className="mb-6 max-w-sm text-sm text-muted-foreground">
-            No milestones match the current filter. Try selecting a different status.
+            {milestones.length === 0
+              ? 'Add your first milestone to start building your marketing roadmap.'
+              : 'No milestones match the current filter. Try selecting a different status.'}
           </p>
+          {milestones.length === 0 && (
+            <Button size="sm" className="gap-2" onClick={() => setShowAdd(true)}>
+              <Plus className="h-3.5 w-3.5" />
+              Add Milestone
+            </Button>
+          )}
         </div>
       )}
     </div>

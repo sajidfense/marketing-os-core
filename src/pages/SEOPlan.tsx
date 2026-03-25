@@ -1,4 +1,4 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react';
 import {
   SearchCheck,
   Plus,
@@ -10,6 +10,7 @@ import {
   Circle,
   ChevronDown,
   ExternalLink,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -17,8 +18,11 @@ import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { EmptyState } from '@/components/shared/EmptyState';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { api, ApiError } from '@/services/api';
+import type { ApiResponse } from '@/types';
 
 type TaskStatus = 'done' | 'in-progress' | 'todo';
 
@@ -31,13 +35,17 @@ interface SEOTask {
   impact: string;
 }
 
-interface KeywordTarget {
-  keyword: string;
-  currentRank: number | null;
-  targetRank: number;
-  volume: number;
-  difficulty: 'easy' | 'medium' | 'hard';
-  page: string;
+interface ApiSEOTask {
+  id: string;
+  organization_id: string;
+  title: string;
+  category: 'technical' | 'on-page' | 'content' | 'off-page';
+  priority: 'high' | 'medium' | 'low';
+  status: TaskStatus;
+  impact: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 const statusConfig: Record<TaskStatus, { icon: typeof CheckCircle2; variant: 'success' | 'default' | 'secondary' }> = {
@@ -59,48 +67,21 @@ const categoryColors: Record<string, string> = {
   'off-page': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
 };
 
-const initialTasks: SEOTask[] = [
-  { id: '1', title: 'Fix crawl errors in Google Search Console', category: 'technical', priority: 'high', status: 'done', impact: 'Improves indexation' },
-  { id: '2', title: 'Add structured data (FAQ, Product)', category: 'technical', priority: 'high', status: 'in-progress', impact: 'Rich snippet eligibility' },
-  { id: '3', title: 'Optimize title tags for top 10 pages', category: 'on-page', priority: 'high', status: 'in-progress', impact: '+15% CTR potential' },
-  { id: '4', title: 'Internal linking audit and optimization', category: 'on-page', priority: 'medium', status: 'todo', impact: 'Better authority flow' },
-  { id: '5', title: 'Create pillar content for "marketing automation"', category: 'content', priority: 'high', status: 'todo', impact: 'Topical authority' },
-  { id: '6', title: 'Write 5 supporting blog posts', category: 'content', priority: 'medium', status: 'todo', impact: 'Content cluster' },
-  { id: '7', title: 'Guest post outreach (10 sites)', category: 'off-page', priority: 'medium', status: 'todo', impact: '+8 backlinks' },
-  { id: '8', title: 'Image compression and WebP conversion', category: 'technical', priority: 'low', status: 'done', impact: '-2s load time' },
-];
-
-const mockKeywords: KeywordTarget[] = [
-  { keyword: 'marketing automation software', currentRank: 18, targetRank: 5, volume: 12100, difficulty: 'hard', page: '/features' },
-  { keyword: 'email marketing tools', currentRank: 24, targetRank: 10, volume: 8100, difficulty: 'medium', page: '/email' },
-  { keyword: 'social media scheduler', currentRank: null, targetRank: 15, volume: 6600, difficulty: 'medium', page: '/social' },
-  { keyword: 'marketing os', currentRank: 8, targetRank: 3, volume: 2400, difficulty: 'easy', page: '/' },
-  { keyword: 'campaign management tool', currentRank: 32, targetRank: 10, volume: 4400, difficulty: 'hard', page: '/campaigns' },
-];
-
-const difficultyVariant: Record<string, 'success' | 'warning' | 'destructive'> = {
-  easy: 'success',
-  medium: 'warning',
-  hard: 'destructive',
-};
+function mapApiTask(t: ApiSEOTask): SEOTask {
+  return {
+    id: t.id,
+    title: t.title,
+    category: t.category,
+    priority: t.priority,
+    status: t.status,
+    impact: t.impact ?? 'To be assessed',
+  };
+}
 
 export default function SEOPlan() {
-  const [tasks, setTasks] = useState<SEOTask[]>(initialTasks);
-
-  // Pick up tasks from SEO Analyzer / Report pages
-  useEffect(() => {
-    const stored = sessionStorage.getItem('seo-plan-tasks');
-    if (stored) {
-      try {
-        const incoming = JSON.parse(stored) as SEOTask[];
-        if (incoming.length > 0) {
-          setTasks((prev) => [...prev, ...incoming]);
-          toast.success(`${incoming.length} tasks imported from SEO report`);
-        }
-      } catch { /* ignore */ }
-      sessionStorage.removeItem('seo-plan-tasks');
-    }
-  }, []);
+  const [tasks, setTasks] = useState<SEOTask[]>([]);
+  const [loading, setLoading] = useState(true);
+  const importedRef = useRef(false);
 
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
@@ -110,41 +91,118 @@ export default function SEOPlan() {
   const [addPriority, setAddPriority] = useState<SEOTask['priority']>('medium');
   const [addImpact, setAddImpact] = useState('');
 
+  const fetchTasks = useCallback(async () => {
+    try {
+      const res = await api.get<ApiResponse<ApiSEOTask[]>>('/seo-tasks');
+      if (res.success && res.data) {
+        setTasks(res.data.map(mapApiTask));
+      }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to load SEO tasks';
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
+
+  // Pick up tasks from SEO Analyzer / Report pages via sessionStorage
+  useEffect(() => {
+    if (loading || importedRef.current) return;
+    importedRef.current = true;
+
+    const stored = sessionStorage.getItem('seo-plan-tasks');
+    if (!stored) return;
+
+    try {
+      const incoming = JSON.parse(stored) as SEOTask[];
+      if (incoming.length > 0) {
+        // POST each task to the API, then re-fetch
+        const promises = incoming.map((task) =>
+          api.post<ApiResponse<ApiSEOTask>>('/seo-tasks', {
+            title: task.title,
+            category: task.category,
+            priority: task.priority,
+            status: task.status,
+            impact: task.impact,
+          })
+        );
+        Promise.all(promises)
+          .then(() => {
+            toast.success(`${incoming.length} tasks imported from SEO report`);
+            fetchTasks();
+          })
+          .catch(() => {
+            toast.error('Failed to import some SEO tasks');
+          });
+      }
+    } catch { /* ignore */ }
+    sessionStorage.removeItem('seo-plan-tasks');
+  }, [loading, fetchTasks]);
+
   const filteredTasks = categoryFilter === 'all'
     ? tasks
     : tasks.filter((t) => t.category === categoryFilter);
 
   const done = tasks.filter((t) => t.status === 'done').length;
-  const progress = Math.round((done / tasks.length) * 100);
+  const progress = tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0;
 
-  function handleAdd(e: FormEvent) {
+  async function handleAdd(e: FormEvent) {
     e.preventDefault();
-    const newTask: SEOTask = {
-      id: String(Date.now()),
-      title: addTitle,
-      category: addCategory,
-      priority: addPriority,
-      status: 'todo',
-      impact: addImpact || 'To be assessed',
-    };
-    setTasks((prev) => [...prev, newTask]);
-    setShowAdd(false);
-    setAddTitle('');
-    setAddImpact('');
-    setAddCategory('technical');
-    setAddPriority('medium');
-    toast.success('SEO task added');
+    try {
+      await api.post<ApiResponse<ApiSEOTask>>('/seo-tasks', {
+        title: addTitle,
+        category: addCategory,
+        priority: addPriority,
+        status: 'todo',
+        impact: addImpact || 'To be assessed',
+      });
+      setShowAdd(false);
+      setAddTitle('');
+      setAddImpact('');
+      setAddCategory('technical');
+      setAddPriority('medium');
+      toast.success('SEO task added');
+      await fetchTasks();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to add SEO task';
+      toast.error(message);
+    }
   }
 
-  function cycleStatus(id: string) {
+  async function cycleStatus(id: string) {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return;
+
+    const next: TaskStatus = task.status === 'todo' ? 'in-progress' : task.status === 'in-progress' ? 'done' : 'todo';
+
+    // Optimistic update
     setTasks((prev) =>
-      prev.map((t) => {
-        if (t.id !== id) return t;
-        const next: TaskStatus = t.status === 'todo' ? 'in-progress' : t.status === 'in-progress' ? 'done' : 'todo';
-        return { ...t, status: next };
-      })
+      prev.map((t) => (t.id === id ? { ...t, status: next } : t))
     );
-    toast.success('Status updated');
+
+    try {
+      await api.patch<ApiResponse<ApiSEOTask>>(`/seo-tasks/${id}`, { status: next });
+      toast.success('Status updated');
+    } catch (err) {
+      // Revert on failure
+      setTasks((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, status: task.status } : t))
+      );
+      const message = err instanceof ApiError ? err.message : 'Failed to update status';
+      toast.error(message);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
   }
 
   return (
@@ -212,8 +270,18 @@ export default function SEOPlan() {
         </form>
       </Dialog>
 
+      {tasks.length === 0 && (
+        <EmptyState
+          icon={SearchCheck}
+          title="No SEO plan yet"
+          description="Run your first SEO analysis to generate action items, or add tasks manually."
+          actionLabel="Add Task"
+          onAction={() => setShowAdd(true)}
+        />
+      )}
+
       {/* Overview cards */}
-      <div className="grid gap-4 sm:grid-cols-4">
+      {tasks.length > 0 && <div className="grid gap-4 sm:grid-cols-4">
         <Card className="p-4">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Plan Progress</p>
           <p className="text-xl font-bold tabular-nums mt-0.5">{progress}%</p>
@@ -223,68 +291,20 @@ export default function SEOPlan() {
         </Card>
         <Card className="p-4">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Keywords Tracked</p>
-          <p className="text-xl font-bold tabular-nums mt-0.5">{mockKeywords.length}</p>
+          <p className="text-xl font-bold tabular-nums mt-0.5">0</p>
         </Card>
         <Card className="p-4">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Avg. Position</p>
-          <p className="text-xl font-bold tabular-nums mt-0.5">
-            {Math.round(mockKeywords.filter((k) => k.currentRank).reduce((s, k) => s + (k.currentRank ?? 0), 0) / mockKeywords.filter((k) => k.currentRank).length)}
-          </p>
+          <p className="text-xl font-bold tabular-nums mt-0.5">-</p>
         </Card>
         <Card className="p-4">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Tasks Remaining</p>
           <p className="text-xl font-bold tabular-nums mt-0.5">{tasks.length - done}</p>
         </Card>
-      </div>
-
-      {/* Keyword Targets */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Keyword Targets</CardTitle>
-          <CardDescription>Track your ranking progress for priority keywords</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="pb-3 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Keyword</th>
-                  <th className="pb-3 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Current</th>
-                  <th className="pb-3 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Target</th>
-                  <th className="pb-3 text-right text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Volume</th>
-                  <th className="pb-3 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Difficulty</th>
-                  <th className="pb-3 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Page</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mockKeywords.map((kw, i) => (
-                  <tr key={i} className="border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="py-3 font-medium">{kw.keyword}</td>
-                    <td className="py-3 text-center">
-                      {kw.currentRank ? (
-                        <span className="tabular-nums font-medium">#{kw.currentRank}</span>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">N/A</span>
-                      )}
-                    </td>
-                    <td className="py-3 text-center">
-                      <span className="tabular-nums text-primary font-medium">#{kw.targetRank}</span>
-                    </td>
-                    <td className="py-3 text-right tabular-nums">{kw.volume.toLocaleString()}</td>
-                    <td className="py-3 text-center">
-                      <Badge variant={difficultyVariant[kw.difficulty]} className="text-[10px]">{kw.difficulty}</Badge>
-                    </td>
-                    <td className="py-3 text-xs text-muted-foreground">{kw.page}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      </div>}
 
       {/* SEO Tasks */}
-      <div>
+      {tasks.length > 0 && <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold">Action Items</h2>
           <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
@@ -350,7 +370,7 @@ export default function SEOPlan() {
             );
           })}
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

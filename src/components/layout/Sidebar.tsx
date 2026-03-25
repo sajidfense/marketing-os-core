@@ -187,7 +187,7 @@ export function Sidebar() {
         ))}
 
         <button
-          onClick={() => logout()}
+          onClick={() => { logout().catch(() => {}); }}
           className={cn(
             'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium text-[hsl(var(--sidebar-foreground))] transition-colors hover:bg-[hsl(var(--sidebar-hover))] hover:text-foreground',
             collapsed && 'justify-center px-0'

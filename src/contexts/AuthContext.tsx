@@ -26,6 +26,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setState({ user: session?.user ?? null, session, loading: false });
+    }).catch(() => {
+      // Session retrieval failed — treat as logged out
+      setState({ user: null, session: null, loading: false });
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -50,8 +53,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    // Always clear local state even if signOut fails
+    setState({ user: null, session: null, loading: false });
+    await supabase.auth.signOut().catch(() => {});
   }, []);
 
   return (

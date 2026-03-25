@@ -184,6 +184,8 @@ export async function consumeCredits(
 
     if (retryErr || !retryData) {
       console.error(`[credits] Consume failed after retry for org ${orgId}:`, retryErr?.message);
+      // Still log the transaction so the audit trail isn't lost
+      await logConsumeTransaction(orgId, cost, skillType, userId);
       // Return current usage rather than throwing — the AI call can still proceed
       return { ...retryUsage, credits_used: retryUsed };
     }
@@ -228,24 +230,52 @@ export async function addPurchasedCredits(
       updated_at: new Date().toISOString(),
     })
     .eq('organization_id', orgId)
+    .eq('credits_limit', usage.credits_limit) // optimistic concurrency check
     .select('*')
     .single();
 
   if (error || !data) {
-    console.error(`[credits] Failed to add purchased credits for org ${orgId}:`, error?.message);
-    throw new Error('Failed to add purchased credits');
+    // Retry once on concurrency conflict
+    console.log(`[credits] Purchase concurrency conflict for org ${orgId}, retrying...`);
+    const retryUsage = await getOrCreateUsage(orgId);
+    const retryLimit = retryUsage.credits_limit + credits;
+
+    const { data: retryData, error: retryErr } = await supabase
+      .from('organization_usage')
+      .update({
+        credits_limit: retryLimit,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('organization_id', orgId)
+      .select('*')
+      .single();
+
+    if (retryErr || !retryData) {
+      console.error(`[credits] Failed to add purchased credits for org ${orgId}:`, retryErr?.message);
+      throw new Error('Failed to add purchased credits');
+    }
+
+    // Log transaction
+    await logPurchaseTransaction(orgId, credits, stripeSessionId);
+    return retryData as UsageRecord;
   }
 
   // Log transaction
-  await supabase.from('credit_transactions').insert({
+  await logPurchaseTransaction(orgId, credits, stripeSessionId);
+  return data as UsageRecord;
+}
+
+async function logPurchaseTransaction(
+  orgId: string,
+  credits: number,
+  stripeSessionId?: string,
+): Promise<void> {
+  const { error: txErr } = await supabase.from('credit_transactions').insert({
     organization_id: orgId,
     credits,
     type: 'purchase',
     description: `Purchased ${credits} credits`,
     stripe_session_id: stripeSessionId ?? null,
-  }).then(({ error: txErr }) => {
-    if (txErr) console.error(`[credits] Failed to log purchase transaction:`, txErr.message);
   });
-
-  return data as UsageRecord;
+  if (txErr) console.error(`[credits] Failed to log purchase transaction:`, txErr.message);
 }

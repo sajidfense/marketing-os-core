@@ -2,6 +2,24 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { supabase } from '../lib/supabase';
 
+// ── Validation schemas ─────────────────────────────────────────────
+
+const campaignSchema = z.object({
+  name: z.string().min(1, 'Campaign name is required').max(200),
+  type: z.string().min(1).max(100),
+  goal: z.string().max(500).optional(),
+});
+
+const brandingSchema = z.object({
+  primary_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  secondary_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  logo_url: z.string().url().optional(),
+});
+
+const goalsSchema = z.object({
+  goals: z.array(z.string().max(200)).max(10),
+});
+
 const createOrgSchema = z.object({
   name: z.string().min(2, 'Organization name must be at least 2 characters').max(100),
 });
@@ -132,15 +150,13 @@ async function finishOnboarding(
     return;
   }
 
-  // 5. Create default branding
+  // 5. Initialize usage tracking
   await supabase
-    .from('branding_settings')
-    .insert({ organization_id: orgId });
-
-  // 6. Create default subscription
-  await supabase
-    .from('subscriptions')
-    .insert({ organization_id: orgId, plan: 'free', status: 'active' });
+    .from('organization_usage')
+    .upsert(
+      { organization_id: orgId, credits_used: 0, credits_limit: 100, period_start: new Date().toISOString() },
+      { onConflict: 'organization_id' },
+    );
 
   res.status(201).json({
     success: true,
@@ -149,4 +165,83 @@ async function finishOnboarding(
       membership: { organization_id: orgId, user_id: req.userId, role: 'owner' },
     },
   });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ONBOARDING STEPS (called after org exists — behind auth+org middleware)
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Step: Create first campaign ─────────────────────────────────
+
+export async function onboardingCreateCampaign(req: Request, res: Response): Promise<void> {
+  const parsed = campaignSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ success: false, error: 'Validation failed', details: parsed.error.flatten() });
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from('campaigns')
+    .insert({
+      ...parsed.data,
+      organization_id: req.organizationId,
+      created_by: req.userId,
+      status: 'draft',
+    })
+    .select()
+    .single();
+
+  if (error) {
+    res.status(500).json({ success: false, error: 'Failed to create campaign' });
+    return;
+  }
+
+  res.status(201).json({ success: true, data });
+}
+
+// ── Step: Set branding ──────────────────────────────────────────
+
+export async function onboardingSetBranding(req: Request, res: Response): Promise<void> {
+  const parsed = brandingSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ success: false, error: 'Validation failed', details: parsed.error.flatten() });
+    return;
+  }
+
+  const { error } = await supabase
+    .from('branding_settings')
+    .upsert(
+      { organization_id: req.organizationId, ...parsed.data },
+      { onConflict: 'organization_id' },
+    );
+
+  if (error) {
+    res.status(500).json({ success: false, error: 'Failed to save branding' });
+    return;
+  }
+
+  res.json({ success: true });
+}
+
+// ── Step: Save goals ────────────────────────────────────────────
+
+export async function onboardingSaveGoals(req: Request, res: Response): Promise<void> {
+  const parsed = goalsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ success: false, error: 'Validation failed', details: parsed.error.flatten() });
+    return;
+  }
+
+  // Store goals as organization metadata
+  const { error } = await supabase
+    .from('organizations')
+    .update({ metadata: { goals: parsed.data.goals } })
+    .eq('id', req.organizationId);
+
+  if (error) {
+    res.status(500).json({ success: false, error: 'Failed to save goals' });
+    return;
+  }
+
+  res.json({ success: true });
 }

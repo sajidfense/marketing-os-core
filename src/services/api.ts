@@ -43,6 +43,8 @@ class ApiClient {
       if (!error) {
         return this.request<T>(method, path, body, true);
       }
+      // Refresh failed — session is dead, force sign-out so auth context redirects to login
+      await supabase.auth.signOut().catch(() => {});
     }
 
     if (!res.ok) {

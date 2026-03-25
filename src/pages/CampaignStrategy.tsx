@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Target,
@@ -11,6 +11,7 @@ import {
   Globe,
   Users,
   Sparkles,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -19,8 +20,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { EmptyState } from '@/components/shared/EmptyState';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { api, ApiError } from '@/services/api';
+import type { ApiResponse } from '@/types';
 
 interface Strategy {
   id: string;
@@ -34,6 +38,22 @@ interface Strategy {
   audiences: string[];
 }
 
+interface ApiStrategy {
+  id: string;
+  organization_id: string;
+  name: string;
+  objective: string;
+  status: 'active' | 'planning' | 'completed' | 'paused';
+  channels: string[] | null;
+  budget: number | null;
+  timeframe: string;
+  kpis: { label: string; target: string; current: string }[] | null;
+  audiences: string[] | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 const statusVariant: Record<string, 'success' | 'default' | 'secondary' | 'warning'> = {
   active: 'success',
   planning: 'default',
@@ -41,75 +61,29 @@ const statusVariant: Record<string, 'success' | 'default' | 'secondary' | 'warni
   paused: 'warning',
 };
 
-const initialStrategies: Strategy[] = [
-  {
-    id: '1',
-    name: 'Q1 Growth Campaign',
-    objective: 'Increase MQLs by 40% through multi-channel paid and organic efforts.',
-    status: 'active',
-    channels: ['Google Ads', 'LinkedIn', 'Blog', 'Email'],
-    budget: 25000,
-    timeframe: 'Jan - Mar 2026',
-    kpis: [
-      { label: 'MQLs', target: '500', current: '312' },
-      { label: 'CAC', target: '$48', current: '$52' },
-      { label: 'Pipeline', target: '$250K', current: '$180K' },
-    ],
-    audiences: ['SaaS Founders', 'Marketing Directors', 'CMOs'],
-  },
-  {
-    id: '2',
-    name: 'Brand Awareness Push',
-    objective: 'Build brand recognition in target market through content and social.',
-    status: 'active',
-    channels: ['Instagram', 'TikTok', 'YouTube', 'Blog'],
-    budget: 12000,
-    timeframe: 'Feb - Apr 2026',
-    kpis: [
-      { label: 'Reach', target: '500K', current: '280K' },
-      { label: 'Followers', target: '+2,000', current: '+1,240' },
-      { label: 'Engagement', target: '4.5%', current: '3.8%' },
-    ],
-    audiences: ['Startup Teams', 'Digital Marketers'],
-  },
-  {
-    id: '3',
-    name: 'Product Launch - Summer',
-    objective: 'Launch new product tier with coordinated campaign across all channels.',
-    status: 'planning',
-    channels: ['Email', 'Google Ads', 'PR', 'Social'],
-    budget: 35000,
-    timeframe: 'Jun - Jul 2026',
-    kpis: [
-      { label: 'Signups', target: '1,000', current: '-' },
-      { label: 'Revenue', target: '$100K', current: '-' },
-    ],
-    audiences: ['Current Users', 'Enterprise Prospects'],
-  },
-  {
-    id: '4',
-    name: 'SEO Content Engine',
-    objective: 'Build topical authority through systematic content creation.',
-    status: 'active',
-    channels: ['Blog', 'YouTube'],
-    budget: 8000,
-    timeframe: 'Ongoing',
-    kpis: [
-      { label: 'Organic Traffic', target: '+60%', current: '+28%' },
-      { label: 'Rankings Top 10', target: '50', current: '22' },
-    ],
-    audiences: ['Organic Searchers'],
-  },
-];
-
 function formatCurrency(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 }
 
+function mapApiStrategy(s: ApiStrategy): Strategy {
+  return {
+    id: s.id,
+    name: s.name,
+    objective: s.objective ?? '',
+    status: s.status,
+    channels: s.channels ?? [],
+    budget: s.budget ?? 0,
+    timeframe: s.timeframe ?? '',
+    kpis: s.kpis ?? [],
+    audiences: s.audiences ?? [],
+  };
+}
+
 export default function CampaignStrategy() {
   const navigate = useNavigate();
-  const [strategies, setStrategies] = useState<Strategy[]>(initialStrategies);
-  const [expandedId, setExpandedId] = useState<string | null>('1');
+  const [strategies, setStrategies] = useState<Strategy[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [addName, setAddName] = useState('');
   const [addObjective, setAddObjective] = useState('');
@@ -117,30 +91,60 @@ export default function CampaignStrategy() {
   const [addTimeframe, setAddTimeframe] = useState('');
   const [addChannels, setAddChannels] = useState('');
 
+  const fetchStrategies = useCallback(async () => {
+    try {
+      const res = await api.get<ApiResponse<ApiStrategy[]>>('/strategies');
+      if (res.success && res.data) {
+        setStrategies(res.data.map(mapApiStrategy));
+      }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to load strategies';
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStrategies();
+  }, [fetchStrategies]);
+
   const totalBudget = strategies.reduce((s, st) => s + st.budget, 0);
   const activeCount = strategies.filter((s) => s.status === 'active').length;
 
-  function handleAdd(e: FormEvent) {
+  async function handleAdd(e: FormEvent) {
     e.preventDefault();
-    const newStrategy: Strategy = {
-      id: String(Date.now()),
-      name: addName,
-      objective: addObjective,
-      status: 'planning',
-      channels: addChannels.split(',').map((c) => c.trim()).filter(Boolean),
-      budget: parseInt(addBudget, 10) || 0,
-      timeframe: addTimeframe,
-      kpis: [],
-      audiences: [],
-    };
-    setStrategies((prev) => [...prev, newStrategy]);
-    setShowAdd(false);
-    setAddName('');
-    setAddObjective('');
-    setAddBudget('');
-    setAddTimeframe('');
-    setAddChannels('');
-    toast.success('Strategy created');
+    try {
+      await api.post<ApiResponse<ApiStrategy>>('/strategies', {
+        name: addName,
+        objective: addObjective,
+        status: 'planning',
+        channels: addChannels.split(',').map((c) => c.trim()).filter(Boolean),
+        budget: parseInt(addBudget, 10) || 0,
+        timeframe: addTimeframe,
+        kpis: [],
+        audiences: [],
+      });
+      setShowAdd(false);
+      setAddName('');
+      setAddObjective('');
+      setAddBudget('');
+      setAddTimeframe('');
+      setAddChannels('');
+      toast.success('Strategy created');
+      await fetchStrategies();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to create strategy';
+      toast.error(message);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
   }
 
   return (
@@ -220,6 +224,15 @@ export default function CampaignStrategy() {
       </div>
 
       {/* Strategy cards */}
+      {strategies.length === 0 ? (
+        <EmptyState
+          icon={Target}
+          title="No strategies yet"
+          description="Create your first campaign strategy to start planning."
+          actionLabel="New Strategy"
+          onAction={() => setShowAdd(true)}
+        />
+      ) : (
       <div className="space-y-3">
         {strategies.map((strategy) => {
           const isExpanded = expandedId === strategy.id;
@@ -301,6 +314,7 @@ export default function CampaignStrategy() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import {
   Users,
   Plus,
@@ -10,6 +10,7 @@ import {
   Tag,
   MoreHorizontal,
   ArrowUpDown,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,8 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { exportToCSV } from '@/lib/export';
 import { cn } from '@/lib/utils';
+import { api, ApiError } from '@/services/api';
+import type { ApiResponse } from '@/types';
 
 type LeadStage = 'new' | 'contacted' | 'qualified' | 'proposal' | 'won' | 'lost';
 
@@ -36,6 +39,24 @@ interface Lead {
   lastActivity: string;
 }
 
+/** Shape returned by the API for a single lead row. */
+interface ApiLead {
+  id: string;
+  organization_id: string;
+  name: string;
+  email: string;
+  company: string | null;
+  website: string | null;
+  stage: LeadStage;
+  value: number;
+  tags: string[] | null;
+  last_activity: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 const stageConfig: Record<LeadStage, { label: string; color: string; variant: 'secondary' | 'default' | 'success' | 'warning' | 'destructive' | 'outline' }> = {
   new: { label: 'New', color: '#3B82F6', variant: 'default' },
   contacted: { label: 'Contacted', color: '#8B5CF6', variant: 'default' },
@@ -45,22 +66,41 @@ const stageConfig: Record<LeadStage, { label: string; color: string; variant: 's
   lost: { label: 'Lost', color: '#64748B', variant: 'secondary' },
 };
 
-const initialLeads: Lead[] = [
-  { id: '1', name: 'Sarah Chen', email: 'sarah@techflow.io', company: 'TechFlow', website: 'techflow.io', stage: 'qualified', value: 12000, tags: ['enterprise', 'saas'], lastActivity: '2 hours ago' },
-  { id: '2', name: 'Marcus Johnson', email: 'marcus@retailmax.com', company: 'RetailMax', website: 'retailmax.com', stage: 'proposal', value: 24000, tags: ['ecommerce'], lastActivity: '1 day ago' },
-  { id: '3', name: 'Emily Wong', email: 'emily@greenleaf.co', company: 'GreenLeaf', website: 'greenleaf.co', stage: 'new', value: 8000, tags: ['startup'], lastActivity: '3 hours ago' },
-  { id: '4', name: 'David Park', email: 'david@nomadlabs.dev', company: 'Nomad Labs', website: 'nomadlabs.dev', stage: 'contacted', value: 15000, tags: ['agency', 'tech'], lastActivity: '5 hours ago' },
-  { id: '5', name: 'Lisa Martinez', email: 'lisa@suncoast.com', company: 'SunCoast Hotels', website: 'suncoast.com', stage: 'won', value: 36000, tags: ['hospitality', 'enterprise'], lastActivity: '1 week ago' },
-  { id: '6', name: 'James Wilson', email: 'james@craftbrew.co', company: 'CraftBrew Co', website: 'craftbrew.co', stage: 'new', value: 5000, tags: ['food-bev'], lastActivity: '1 hour ago' },
-  { id: '7', name: 'Anna Schmidt', email: 'anna@designhaus.de', company: 'DesignHaus', website: 'designhaus.de', stage: 'lost', value: 18000, tags: ['agency'], lastActivity: '2 weeks ago' },
-];
-
 function formatCurrency(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 }
 
+function formatRelativeDate(iso: string): string {
+  const date = new Date(iso);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60_000);
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
+
+function mapApiLead(apiLead: ApiLead): Lead {
+  return {
+    id: apiLead.id,
+    name: apiLead.name,
+    email: apiLead.email,
+    company: apiLead.company ?? '',
+    website: apiLead.website ?? '',
+    stage: apiLead.stage,
+    value: apiLead.value ?? 0,
+    tags: apiLead.tags ?? [],
+    lastActivity: formatRelativeDate(apiLead.last_activity ?? apiLead.created_at),
+  };
+}
+
 export default function Leads() {
-  const [leads, setLeads] = useState<Lead[]>(initialLeads);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState<LeadStage | 'all'>('all');
   const [view, setView] = useState<'table' | 'pipeline'>('table');
@@ -70,6 +110,25 @@ export default function Leads() {
   const [addCompany, setAddCompany] = useState('');
   const [addValue, setAddValue] = useState('');
   const [addStage, setAddStage] = useState<LeadStage>('new');
+  const [submitting, setSubmitting] = useState(false);
+
+  const fetchLeads = useCallback(async () => {
+    try {
+      const res = await api.get<ApiResponse<ApiLead[]>>('/leads');
+      if (res.success && res.data) {
+        setLeads(res.data.map(mapApiLead));
+      }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to load leads';
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLeads();
+  }, [fetchLeads]);
 
   const filtered = leads
     .filter((l) => stageFilter === 'all' || l.stage === stageFilter)
@@ -98,30 +157,44 @@ export default function Leads() {
     toast.success('Leads exported');
   }
 
-  function handleAdd(e: FormEvent) {
+  async function handleAdd(e: FormEvent) {
     e.preventDefault();
-    const newLead: Lead = {
-      id: String(Date.now()),
-      name: addName,
-      email: addEmail,
-      company: addCompany,
-      website: '',
-      stage: addStage,
-      value: parseInt(addValue, 10) || 0,
-      tags: [],
-      lastActivity: 'Just now',
-    };
-    setLeads((prev) => [newLead, ...prev]);
-    setShowAdd(false);
-    setAddName('');
-    setAddEmail('');
-    setAddCompany('');
-    setAddValue('');
-    setAddStage('new');
-    toast.success('Lead added');
+    setSubmitting(true);
+    try {
+      await api.post<ApiResponse<ApiLead>>('/leads', {
+        name: addName,
+        email: addEmail,
+        company: addCompany || null,
+        website: null,
+        stage: addStage,
+        value: parseInt(addValue, 10) || 0,
+        tags: [],
+      });
+      setShowAdd(false);
+      setAddName('');
+      setAddEmail('');
+      setAddCompany('');
+      setAddValue('');
+      setAddStage('new');
+      toast.success('Lead added');
+      await fetchLeads();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to add lead';
+      toast.error(message);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   const totalValue = filtered.reduce((s, l) => s + l.value, 0);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -183,9 +256,9 @@ export default function Leads() {
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" size="sm" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button type="submit" size="sm" className="gap-2" disabled={!addName.trim() || !addEmail.trim()}>
-              <Plus className="h-3.5 w-3.5" />
-              Add Lead
+            <Button type="submit" size="sm" className="gap-2" disabled={!addName.trim() || !addEmail.trim() || submitting}>
+              {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              {submitting ? 'Adding...' : 'Add Lead'}
             </Button>
           </div>
         </form>

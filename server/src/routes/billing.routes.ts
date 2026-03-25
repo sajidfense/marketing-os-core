@@ -276,6 +276,29 @@ billingRouter.post('/webhook/stripe', async (req: Request, res: Response) => {
       break;
     }
 
+    case 'invoice.payment_failed': {
+      const invoice = event.data.object as Stripe.Invoice;
+      const subId = invoice.subscription as string | null;
+      if (subId) {
+        // Mark subscription as past_due
+        const { data: subRecord } = await supabase
+          .from('subscriptions')
+          .select('organization_id')
+          .eq('stripe_subscription_id', subId)
+          .single();
+
+        if (subRecord) {
+          await supabase
+            .from('organizations')
+            .update({ subscription_status: 'inactive' })
+            .eq('id', subRecord.organization_id)
+            .eq('comped', false);
+          console.log(`[billing] Payment failed for org ${subRecord.organization_id}, set inactive`);
+        }
+      }
+      break;
+    }
+
     default:
       console.log(`[billing] Unhandled event: ${event.type}`);
   }

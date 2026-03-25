@@ -52,6 +52,14 @@ const envSchema = z.object({
   // ── Frontend URL (for OAuth redirects) ──────────────────────
   FRONTEND_URL: z.string().url().optional(),
 
+  // ── Integrations Vault (encryption key for API keys) ──────────
+  // 64-char hex string (32 bytes). Generate with:
+  //   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  INTEGRATIONS_ENCRYPTION_KEY: z
+    .string()
+    .length(64, 'INTEGRATIONS_ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)')
+    .regex(/^[0-9a-fA-F]+$/, 'INTEGRATIONS_ENCRYPTION_KEY must be a hex string'),
+
   // ── Rate-limiting / caps (optional) ────────────────────────────
   DAILY_USER_GENERATION_CAP: z
     .string()

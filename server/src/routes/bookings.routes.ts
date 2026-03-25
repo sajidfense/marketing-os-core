@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { list, create, getById, update, remove } from '../controllers/bookings.controller';
+import { asyncHandler } from '../lib/asyncHandler';
 
 export const bookingsRouter = Router();
 
-bookingsRouter.get('/',      list);
-bookingsRouter.post('/',     create);
-bookingsRouter.get('/:id',   getById);
-bookingsRouter.patch('/:id', update);
-bookingsRouter.delete('/:id', remove);
+bookingsRouter.get('/',      asyncHandler(list));
+bookingsRouter.post('/',     asyncHandler(create));
+bookingsRouter.get('/:id',   asyncHandler(getById));
+bookingsRouter.patch('/:id', asyncHandler(update));
+bookingsRouter.delete('/:id', asyncHandler(remove));

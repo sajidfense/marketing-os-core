@@ -1,27 +1,47 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Plug,
-  ArrowRight,
   CheckCircle2,
-  Search,
-  ExternalLink,
+  Eye,
+  EyeOff,
   Loader2,
+  Shield,
+  Trash2,
+  KeyRound,
 } from 'lucide-react';
 import { api, ApiError } from '@/services/api';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/shared/PageHeader';
 import type { ApiResponse } from '@/types';
 
-interface IntegrationStatus {
-  google: { connected: boolean; connectedAt: string | null };
-  semrush: { connected: boolean };
+// ── Types ────────────────────────────────────────────────────────
+
+type Provider = 'semrush' | 'google_ads' | 'openai';
+
+interface VaultStatusItem {
+  provider: Provider;
+  connected: boolean;
+  connectedAt: string | null;
+  updatedAt: string | null;
 }
 
-const GoogleIcon = () => (
+// ── Provider configs ─────────────────────────────────────────────
+
+interface ProviderConfig {
+  provider: Provider;
+  name: string;
+  description: string;
+  icon: () => JSX.Element;
+  color: string;
+  placeholder: string;
+}
+
+const GoogleAdsIcon = () => (
   <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none">
     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -36,12 +56,214 @@ const SemrushIcon = () => (
   </div>
 );
 
+const OpenAIIcon = () => (
+  <div className="flex h-6 w-6 items-center justify-center rounded bg-neutral-800 text-white text-[10px] font-bold">
+    AI
+  </div>
+);
+
+const PROVIDERS: ProviderConfig[] = [
+  {
+    provider: 'google_ads',
+    name: 'Google Ads',
+    description: 'Connect your Google Ads API key to track spend, campaigns, and conversions.',
+    icon: GoogleAdsIcon,
+    color: '#4285F4',
+    placeholder: 'AIza...',
+  },
+  {
+    provider: 'semrush',
+    name: 'SEMrush',
+    description: 'Keyword research, domain analysis, and competitive intelligence.',
+    icon: SemrushIcon,
+    color: '#FF622D',
+    placeholder: 'Enter your SEMrush API key',
+  },
+  {
+    provider: 'openai',
+    name: 'OpenAI',
+    description: 'Use your own OpenAI key for advanced AI features and higher limits.',
+    icon: OpenAIIcon,
+    color: '#10A37F',
+    placeholder: 'sk-...',
+  },
+];
+
+// ── Integration Card ─────────────────────────────────────────────
+
+interface IntegrationCardProps {
+  config: ProviderConfig;
+  connected: boolean;
+  onSaved: () => void;
+  onDeleted: () => void;
+}
+
+function IntegrationCard({ config, connected, onSaved, onDeleted }: IntegrationCardProps) {
+  const [apiKey, setApiKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const Icon = config.icon;
+
+  async function handleSave() {
+    const trimmed = apiKey.trim();
+    if (!trimmed) {
+      setError('API key is required');
+      return;
+    }
+    if (trimmed.length < 8) {
+      setError('API key seems too short');
+      return;
+    }
+
+    setError(null);
+    setSaving(true);
+
+    try {
+      await api.post<ApiResponse<void>>('/integrations/vault/save', {
+        provider: config.provider,
+        api_key: trimmed,
+      });
+      toast.success(`${config.name} key saved securely`);
+      setApiKey('');
+      setShowKey(false);
+      onSaved();
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Failed to save API key';
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      await api.delete<ApiResponse<void>>(`/integrations/vault/${config.provider}`);
+      toast.success(`${config.name} disconnected`);
+      onDeleted();
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Failed to disconnect';
+      toast.error(msg);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <Card className="group relative overflow-hidden transition-all duration-200 hover:border-primary/20">
+      {/* Accent line */}
+      <div
+        className="absolute inset-x-0 top-0 h-px"
+        style={{ background: `linear-gradient(90deg, transparent, ${config.color}40, transparent)` }}
+      />
+
+      <CardContent className="p-6">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
+              <Icon />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold">{config.name}</h3>
+              {connected ? (
+                <Badge variant="success" className="mt-1 text-[10px]">
+                  <CheckCircle2 className="mr-1 h-2.5 w-2.5" />
+                  Connected
+                </Badge>
+              ) : (
+                <Badge variant="secondary" className="mt-1 text-[10px]">
+                  Not connected
+                </Badge>
+              )}
+            </div>
+          </div>
+
+          {connected && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+              onClick={handleDelete}
+              disabled={deleting}
+              title="Disconnect"
+            >
+              {deleting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          )}
+        </div>
+
+        <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+          {config.description}
+        </p>
+
+        {/* API Key Input */}
+        <div className="space-y-3">
+          <div className="relative">
+            <Input
+              type={showKey ? 'text' : 'password'}
+              placeholder={connected ? 'Enter new key to update' : config.placeholder}
+              value={apiKey}
+              onChange={(e) => {
+                setApiKey(e.target.value);
+                if (error) setError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && apiKey.trim()) handleSave();
+              }}
+              className={`pr-10 font-mono text-xs ${error ? 'border-destructive' : ''}`}
+              autoComplete="off"
+              spellCheck={false}
+              data-1p-ignore
+              data-lpignore="true"
+            />
+            <button
+              type="button"
+              onClick={() => setShowKey(!showKey)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              tabIndex={-1}
+            >
+              {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            </button>
+          </div>
+
+          {error && (
+            <p className="text-[11px] text-destructive">{error}</p>
+          )}
+
+          <Button
+            size="sm"
+            className="w-full gap-2"
+            onClick={handleSave}
+            disabled={saving || !apiKey.trim()}
+          >
+            {saving ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <KeyRound className="h-3 w-3" />
+            )}
+            {connected ? 'Update Key' : 'Save Key'}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Main Page ────────────────────────────────────────────────────
+
 export default function Integrations() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [status, setStatus] = useState<IntegrationStatus | null>(null);
+  const [statuses, setStatuses] = useState<VaultStatusItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [connecting, setConnecting] = useState<string | null>(null);
 
   useEffect(() => {
     if (searchParams.get('google') === 'connected') {
@@ -49,58 +271,37 @@ export default function Integrations() {
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const result = await api.get<ApiResponse<IntegrationStatus>>('/integrations/status');
-        if (result.data) setStatus(result.data);
-      } catch (err) {
-        const msg = err instanceof ApiError ? err.message : 'Failed to load integrations';
-        toast.error(msg);
-      } finally {
-        setLoading(false);
-      }
+  const loadStatuses = useCallback(async () => {
+    try {
+      const result = await api.get<ApiResponse<VaultStatusItem[]>>('/integrations/vault/status');
+      if (result.data) setStatuses(result.data);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Failed to load integrations';
+      toast.error(msg);
+    } finally {
+      setLoading(false);
     }
-    load();
   }, []);
 
-  async function connectGoogle() {
-    setConnecting('google');
-    try {
-      const result = await api.post<ApiResponse<{ url: string }>>('/integrations/google/connect');
-      if (result.data?.url) {
-        window.location.href = result.data.url;
-      }
-    } catch {
-      toast.error('Failed to start Google connection');
-      setConnecting(null);
-    }
+  useEffect(() => { loadStatuses(); }, [loadStatuses]);
+
+  function isConnected(provider: Provider): boolean {
+    return statuses.some((s) => s.provider === provider && s.connected);
   }
 
-  const integrations = [
-    {
-      id: 'google',
-      name: 'Google Ads',
-      description: 'Connect your Google Ads account to track spend, campaigns, and conversions.',
-      icon: GoogleIcon,
-      connected: status?.google.connected ?? false,
-      connectedAt: status?.google.connectedAt,
-      onConnect: connectGoogle,
-      href: '/google-ads',
-      color: '#4285F4',
-    },
-    {
-      id: 'semrush',
-      name: 'SEMrush',
-      description: 'Keyword research, domain analysis, and competitive intelligence.',
-      icon: SemrushIcon,
-      connected: status?.semrush.connected ?? false,
-      connectedAt: null,
-      onConnect: () => navigate('/semrush'),
-      href: '/semrush',
-      color: '#FF622D',
-    },
-  ];
+  if (loading) {
+    return (
+      <div className="space-y-8">
+        <PageHeader
+          title="Integrations"
+          description="Connect your marketing tools and data sources"
+        />
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -109,77 +310,28 @@ export default function Integrations() {
         description="Connect your marketing tools and data sources"
       />
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {integrations.map((integration) => {
-          const Icon = integration.icon;
-          return (
-            <Card
-              key={integration.id}
-              className="group relative overflow-hidden transition-all duration-200 hover:border-primary/20"
-            >
-              {/* Accent line */}
-              <div
-                className="absolute inset-x-0 top-0 h-px"
-                style={{ background: `linear-gradient(90deg, transparent, ${integration.color}40, transparent)` }}
-              />
+      {/* Security notice */}
+      <div className="flex items-start gap-3 rounded-xl border border-primary/10 bg-primary/5 p-4">
+        <Shield className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+        <div>
+          <p className="text-xs font-medium text-primary">Encrypted Vault</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            API keys are encrypted with AES-256-GCM before storage. Keys are never exposed after saving and are only used server-side.
+          </p>
+        </div>
+      </div>
 
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
-                      <Icon />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-semibold">{integration.name}</h3>
-                      {integration.connected ? (
-                        <Badge variant="success" className="mt-1 text-[10px]">
-                          <CheckCircle2 className="mr-1 h-2.5 w-2.5" />
-                          Connected
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary" className="mt-1 text-[10px]">
-                          Not connected
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <p className="text-xs text-muted-foreground mb-5 leading-relaxed">
-                  {integration.description}
-                </p>
-
-                <div className="flex items-center gap-2">
-                  {integration.connected ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2"
-                      onClick={() => navigate(integration.href)}
-                    >
-                      View Dashboard
-                      <ArrowRight className="h-3 w-3" />
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      className="gap-2"
-                      onClick={integration.onConnect}
-                      disabled={connecting === integration.id}
-                    >
-                      {connecting === integration.id ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <ExternalLink className="h-3 w-3" />
-                      )}
-                      Connect
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+      {/* Integration cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {PROVIDERS.map((config) => (
+          <IntegrationCard
+            key={config.provider}
+            config={config}
+            connected={isConnected(config.provider)}
+            onSaved={loadStatuses}
+            onDeleted={loadStatuses}
+          />
+        ))}
       </div>
 
       {/* Upcoming integrations */}

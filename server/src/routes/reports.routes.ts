@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { generateBoardReport, exportPdf, listReports } from '../controllers/reports.controller';
+import { asyncHandler } from '../lib/asyncHandler';
 
 export const reportsRouter = Router();
 
-reportsRouter.post('/generate-board-report', generateBoardReport);
-reportsRouter.post('/export-pdf',            exportPdf);
-reportsRouter.get('/',                       listReports);
+reportsRouter.get('/',           asyncHandler(listReports));
+reportsRouter.post('/',          asyncHandler(generateBoardReport));
+reportsRouter.post('/export',    asyncHandler(exportPdf));
