@@ -31,11 +31,22 @@ class ApiClient {
     const headers = await this.getHeaders();
     const url = `${this.baseUrl}${path}`;
 
-    const res = await fetch(url, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch (err) {
+      // Network error — server unreachable, DNS failure, CORS preflight blocked, etc.
+      console.error(`[api] ${method} ${url} — network error:`, err);
+      throw new ApiError(
+        'Unable to connect to server. Please check your connection and try again.',
+        0,
+        { originalError: String(err) },
+      );
+    }
 
     // On 401, try refreshing the Supabase session and retry once
     if (res.status === 401 && !isRetry) {

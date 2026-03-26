@@ -45,6 +45,10 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       } else if (err instanceof ApiError && err.status === 401) {
         // Auth failure — don't set onboarding, let auth context handle it
         setCurrentOrg(null);
+      } else if (err instanceof ApiError && err.status === 0) {
+        // Network error — server unreachable
+        console.error('Cannot reach API server:', err.message);
+        setCurrentOrg(null);
       } else {
         console.error('Failed to fetch organization settings:', err);
       }
