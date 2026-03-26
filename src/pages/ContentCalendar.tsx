@@ -90,11 +90,15 @@ export default function ContentCalendar() {
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const firstDayOfWeek = (new Date(currentYear, currentMonth, 1).getDay() + 6) % 7; // Mon=0
 
+  const [allItems, setAllItems] = useState<ApiContentItem[]>([]);
+  const [hasAutoJumped, setHasAutoJumped] = useState(false);
+
   const fetchContent = useCallback(async () => {
     try {
       setLoading(true);
       const res = await api.get<ApiResponse<ApiContentItem[]>>('/content-items');
       if (res.success && res.data) {
+        setAllItems(res.data);
         const filtered = res.data
           .filter(
             (item) =>
@@ -103,13 +107,26 @@ export default function ContentCalendar() {
           )
           .map(mapApiItem);
         setContent(filtered);
+
+        // On first load, if current month is empty, jump to first month with content
+        if (!hasAutoJumped && filtered.length === 0 && res.data.length > 0) {
+          const sorted = [...res.data]
+            .filter((i) => i.scheduled_year && i.scheduled_month)
+            .sort((a, b) => a.scheduled_year - b.scheduled_year || a.scheduled_month - b.scheduled_month);
+          if (sorted.length > 0) {
+            const first = sorted[0];
+            setCurrentMonth(first.scheduled_month - 1);
+            setCurrentYear(first.scheduled_year);
+          }
+          setHasAutoJumped(true);
+        }
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load content items');
     } finally {
       setLoading(false);
     }
-  }, [currentMonth, currentYear]);
+  }, [currentMonth, currentYear, hasAutoJumped]);
 
   useEffect(() => {
     fetchContent();
