@@ -25,6 +25,8 @@ import { roadmapRouter } from './routes/roadmap.routes';
 import { creativeAssetsRouter } from './routes/creative-assets.routes';
 import { strategiesRouter } from './routes/strategies.routes';
 import { seoTasksRouter } from './routes/seo-tasks.routes';
+import { performanceRouter } from './routes/performance.routes';
+import { competitorDomainsRouter } from './routes/competitor-domains.routes';
 
 // Import middleware
 import { authMiddleware } from './middleware/auth.middleware';
@@ -106,6 +108,8 @@ api.use('/roadmap', roadmapRouter);
 api.use('/creative-assets', creativeAssetsRouter);
 api.use('/strategies', strategiesRouter);
 api.use('/seo-tasks', seoTasksRouter);
+api.use('/performance', performanceRouter);
+api.use('/competitor-domains', competitorDomainsRouter);
 api.use('/onboarding/steps', onboardingStepsRouter);
 
 app.use('/api', api);

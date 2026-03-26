@@ -46,8 +46,9 @@ const navSections = [
     ],
   },
   {
-    label: 'SEO',
+    label: 'SEO & Analytics',
     items: [
+      { to: '/performance', label: 'Performance & SEO', icon: BarChart3 },
       { to: '/seo/analyzer', label: 'SEO Analyzer', icon: SearchCheck },
       { to: '/seo/report', label: 'SEO Report', icon: FileText },
       { to: '/seo-plan', label: 'SEO Plan', icon: Target },
