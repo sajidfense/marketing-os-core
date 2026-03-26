@@ -539,6 +539,28 @@ export default function Performance() {
               );
             })}
           </div>
+
+          {/* Strategic Positioning */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card className="border-emerald-500/20 bg-emerald-500/5">
+              <CardContent className="p-5">
+                <h4 className="text-sm font-semibold text-emerald-500 mb-2">Finance One's Opportunity</h4>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Fix mobile performance and build backlinks to compete with NOW Finance's balanced approach. With {fmt(primarySnap?.keyword_count)} keywords, there's room to expand organic reach to 30K+ like Plenti.
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="border-amber-500/20 bg-amber-500/5">
+              <CardContent className="p-5">
+                <h4 className="text-sm font-semibold text-amber-500 mb-2">Competitive Gap</h4>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  MoneyMe and Plenti dominate through content scale ({fmt(byDomain['moneyme.com.au']?.keyword_count ?? byDomain['moneyme.com.au']?.organic_traffic)} keywords) and link building ({fmt(byDomain['plenti.com.au']?.backlinks_total)} backlinks). Finance One's challenge is to match their investment in these areas.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <p className="text-[10px] text-center text-muted-foreground">Data sourced from Google PageSpeed Insights and SEMrush Domain Overview</p>
         </div>
       )}
 
