@@ -58,7 +58,9 @@ const envSchema = z.object({
   INTEGRATIONS_ENCRYPTION_KEY: z
     .string()
     .length(64, 'INTEGRATIONS_ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)')
-    .regex(/^[0-9a-fA-F]+$/, 'INTEGRATIONS_ENCRYPTION_KEY must be a hex string'),
+    .regex(/^[0-9a-fA-F]+$/, 'INTEGRATIONS_ENCRYPTION_KEY must be a hex string')
+    .optional()
+    .default('0'.repeat(64)),
 
   // ── Rate-limiting / caps (optional) ────────────────────────────
   DAILY_USER_GENERATION_CAP: z
@@ -81,11 +83,9 @@ function validateEnv() {
       .map((issue) => `  - ${issue.path.join('.')}: ${issue.message}`)
       .join('\n');
 
-    console.error(
-      `\n❌  Environment validation failed:\n${formatted}\n\nPlease check your .env file or environment variables.\n`,
-    );
-
-    process.exit(1);
+    const msg = `Environment validation failed:\n${formatted}`;
+    console.error(`\n❌  ${msg}\n`);
+    throw new Error(msg);
   }
 
   const data = result.data;
@@ -93,15 +93,13 @@ function validateEnv() {
   // Production safety checks
   if (data.NODE_ENV === 'production') {
     if (data.ALLOWED_ORIGINS === '*') {
-      console.error('❌  ALLOWED_ORIGINS must not be "*" in production');
-      process.exit(1);
+      throw new Error('ALLOWED_ORIGINS must not be "*" in production');
     }
     if (data.ADMIN_SECRET || data.ADMIN_PASSWORD) {
       console.warn('⚠️  Admin bypass is enabled in production — disable when not needed');
     }
     if (data.STRIPE_SECRET_KEY.startsWith('pk_')) {
-      console.error('❌  STRIPE_SECRET_KEY appears to be a publishable key, not a secret key');
-      process.exit(1);
+      throw new Error('STRIPE_SECRET_KEY appears to be a publishable key, not a secret key');
     }
   }
 
