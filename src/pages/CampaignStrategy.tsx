@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type FormEvent } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Target,
@@ -12,6 +12,8 @@ import {
   Users,
   Sparkles,
   Loader2,
+  LayoutList,
+  GanttChart,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -26,6 +28,19 @@ import { cn } from '@/lib/utils';
 import { api, ApiError } from '@/services/api';
 import type { ApiResponse } from '@/types';
 
+interface Milestone {
+  date: string;
+  label: string;
+}
+
+interface StrategyMetadata {
+  category?: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  milestones?: Milestone[];
+  source?: string;
+}
+
 interface Strategy {
   id: string;
   name: string;
@@ -36,6 +51,7 @@ interface Strategy {
   timeframe: string;
   kpis: { label: string; target: string; current: string }[];
   audiences: string[];
+  metadata: StrategyMetadata;
 }
 
 interface ApiStrategy {
@@ -49,6 +65,7 @@ interface ApiStrategy {
   timeframe: string;
   kpis: { label: string; target: string; current: string }[] | null;
   audiences: string[] | null;
+  metadata: StrategyMetadata | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -76,7 +93,275 @@ function mapApiStrategy(s: ApiStrategy): Strategy {
     timeframe: s.timeframe ?? '',
     kpis: s.kpis ?? [],
     audiences: s.audiences ?? [],
+    metadata: s.metadata ?? {},
   };
+}
+
+// ── Gantt Timeline ─────────────────────────────────────────────
+const MONTHS = ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const TIMELINE_START = new Date('2026-02-01');
+const TIMELINE_END = new Date('2026-12-31');
+const TOTAL_DAYS = Math.ceil((TIMELINE_END.getTime() - TIMELINE_START.getTime()) / 86_400_000);
+
+const CATEGORY_COLORS: Record<string, string> = {
+  BRAND: 'bg-violet-500/80',
+  AGGREGATOR: 'bg-sky-500/80',
+  BROKER: 'bg-emerald-500/80',
+};
+const CATEGORY_BG: Record<string, string> = {
+  BRAND: 'bg-violet-500/10',
+  AGGREGATOR: 'bg-sky-500/10',
+  BROKER: 'bg-emerald-500/10',
+};
+
+function dayOffset(dateStr: string) {
+  return Math.max(0, Math.ceil((new Date(dateStr).getTime() - TIMELINE_START.getTime()) / 86_400_000));
+}
+
+function GanttTimeline({ strategies }: { strategies: Strategy[] }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const ganttRows = useMemo(() => {
+    const rows = strategies
+      .filter((s) => s.metadata.start_date)
+      .sort((a, b) => {
+        const catOrder = ['BRAND', 'AGGREGATOR', 'BROKER'];
+        const ca = catOrder.indexOf(a.metadata.category ?? '');
+        const cb = catOrder.indexOf(b.metadata.category ?? '');
+        if (ca !== cb) return ca - cb;
+        return new Date(a.metadata.start_date!).getTime() - new Date(b.metadata.start_date!).getTime();
+      });
+    return rows;
+  }, [strategies]);
+
+  // Auto-scroll to current month on mount
+  useEffect(() => {
+    if (scrollRef.current) {
+      const now = new Date();
+      const offset = Math.max(0, Math.ceil((now.getTime() - TIMELINE_START.getTime()) / 86_400_000));
+      const pct = offset / TOTAL_DAYS;
+      const scrollTo = pct * scrollRef.current.scrollWidth - scrollRef.current.clientWidth / 3;
+      scrollRef.current.scrollLeft = Math.max(0, scrollTo);
+    }
+  }, []);
+
+  if (ganttRows.length === 0) return null;
+
+  // Today marker
+  const todayOffset = dayOffset(new Date().toISOString().split('T')[0]);
+  const todayPct = (todayOffset / TOTAL_DAYS) * 100;
+
+  let lastCategory = '';
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Calendar className="h-4 w-4" />
+          2026 Campaign Timeline
+        </CardTitle>
+        <CardDescription className="text-xs">Feb – Dec 2026 · Scroll horizontally to navigate</CardDescription>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div ref={scrollRef} className="overflow-x-auto">
+          <div style={{ minWidth: 1100 }}>
+            {/* Month headers */}
+            <div className="flex border-b border-border/50 sticky top-0 bg-background z-10">
+              <div className="w-52 shrink-0 px-3 py-2 text-[10px] font-medium text-muted-foreground uppercase tracking-wider border-r border-border/30">
+                Campaign
+              </div>
+              <div className="flex-1 flex">
+                {MONTHS.map((m, i) => {
+                  const monthStart = new Date(2026, i + 1, 1);
+                  const monthEnd = new Date(2026, i + 2, 0);
+                  const startPct = (dayOffset(monthStart.toISOString().split('T')[0]) / TOTAL_DAYS) * 100;
+                  const endPct = (dayOffset(monthEnd.toISOString().split('T')[0]) / TOTAL_DAYS) * 100;
+                  const widthPct = endPct - startPct;
+                  return (
+                    <div
+                      key={m}
+                      className="text-center text-[10px] font-medium text-muted-foreground py-2 border-r border-border/20"
+                      style={{ width: `${widthPct}%` }}
+                    >
+                      {m}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Rows */}
+            {ganttRows.map((s) => {
+              const cat = s.metadata.category ?? '';
+              const showCatHeader = cat !== lastCategory;
+              lastCategory = cat;
+
+              const start = s.metadata.start_date!;
+              const end = s.metadata.end_date ?? start;
+              const leftPct = (dayOffset(start) / TOTAL_DAYS) * 100;
+              const rightPct = (dayOffset(end) / TOTAL_DAYS) * 100;
+              const widthPct = Math.max(rightPct - leftPct, 0.8);
+              const barColor = CATEGORY_COLORS[cat] ?? 'bg-primary/60';
+              const milestones = s.metadata.milestones ?? [];
+
+              return (
+                <div key={s.id}>
+                  {showCatHeader && (
+                    <div className={cn('flex border-b border-border/30', CATEGORY_BG[cat])}>
+                      <div className="w-52 shrink-0 px-3 py-1.5 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+                        {cat}
+                      </div>
+                      <div className="flex-1" />
+                    </div>
+                  )}
+                  <div className="flex border-b border-border/20 hover:bg-muted/30 transition-colors group">
+                    <div className="w-52 shrink-0 px-3 py-2.5 text-[11px] font-medium truncate border-r border-border/20" title={s.name}>
+                      {s.name}
+                    </div>
+                    <div className="flex-1 relative py-2">
+                      {/* Today line */}
+                      <div
+                        className="absolute top-0 bottom-0 w-px bg-red-400/50 z-10"
+                        style={{ left: `${todayPct}%` }}
+                      />
+                      {/* Bar */}
+                      <div
+                        className={cn('absolute top-1/2 -translate-y-1/2 h-5 rounded-sm', barColor)}
+                        style={{ left: `${leftPct}%`, width: `${widthPct}%`, minWidth: 6 }}
+                      >
+                        {/* Milestone dots */}
+                        {milestones.map((ms, mi) => {
+                          const msPct = widthPct > 0 ? ((dayOffset(ms.date) - dayOffset(start)) / (dayOffset(end) - dayOffset(start) || 1)) * 100 : 50;
+                          return (
+                            <div
+                              key={mi}
+                              className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-white border border-current shadow-sm"
+                              style={{ left: `${Math.min(Math.max(msPct, 5), 95)}%` }}
+                              title={`${ms.date}: ${ms.label}`}
+                            />
+                          );
+                        })}
+                      </div>
+                      {/* Tooltip on hover */}
+                      <div className="absolute left-0 right-0 top-full opacity-0 group-hover:opacity-100 pointer-events-none z-20 transition-opacity">
+                        <div
+                          className="absolute bg-popover border border-border rounded-md shadow-lg px-3 py-2 text-[10px] max-w-xs"
+                          style={{ left: `${leftPct}%` }}
+                        >
+                          <p className="font-semibold text-[11px]">{s.name}</p>
+                          <p className="text-muted-foreground mt-0.5">{s.timeframe}</p>
+                          {milestones.length > 0 && (
+                            <ul className="mt-1 space-y-0.5 text-muted-foreground">
+                              {milestones.slice(0, 4).map((ms, i) => (
+                                <li key={i}>· {ms.date.slice(5)}: {ms.label}</li>
+                              ))}
+                              {milestones.length > 4 && <li>· +{milestones.length - 4} more</li>}
+                            </ul>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Legend */}
+            <div className="flex items-center gap-4 px-3 py-2 border-t border-border/30">
+              {Object.entries(CATEGORY_COLORS).map(([cat, color]) => (
+                <div key={cat} className="flex items-center gap-1.5">
+                  <div className={cn('w-3 h-2 rounded-sm', color)} />
+                  <span className="text-[10px] text-muted-foreground capitalize">{cat.toLowerCase()}</span>
+                </div>
+              ))}
+              <div className="flex items-center gap-1.5 ml-auto">
+                <div className="w-px h-3 bg-red-400/60" />
+                <span className="text-[10px] text-muted-foreground">Today</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+const TOTAL_BUDGET = 187500;
+const SECTION_BUDGETS: Record<string, number> = {
+  BRAND: 80000,
+  AGGREGATOR: 91500,
+  BROKER: 41000,
+};
+
+function BudgetTracker({ strategies }: { strategies: Strategy[] }) {
+  const spendByCategory: Record<string, number> = {};
+  let totalSpend = 0;
+  for (const s of strategies) {
+    const cat = s.metadata.category ?? 'OTHER';
+    spendByCategory[cat] = (spendByCategory[cat] ?? 0) + s.budget;
+    totalSpend += s.budget;
+  }
+
+  const sections = [
+    { key: 'BRAND', label: 'Brand', color: 'bg-violet-500', allocated: SECTION_BUDGETS.BRAND },
+    { key: 'AGGREGATOR', label: 'Aggregators', color: 'bg-sky-500', allocated: SECTION_BUDGETS.AGGREGATOR },
+    { key: 'BROKER', label: 'Brokers', color: 'bg-emerald-500', allocated: SECTION_BUDGETS.BROKER },
+  ];
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <DollarSign className="h-4 w-4" />
+          Budget Tracker
+        </CardTitle>
+        <CardDescription className="text-xs">
+          Total allocated: {formatCurrency(TOTAL_BUDGET)} · Committed: {formatCurrency(totalSpend)} ({Math.round((totalSpend / TOTAL_BUDGET) * 100)}%)
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Total bar */}
+        <div>
+          <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+            <span>Total Budget</span>
+            <span>{formatCurrency(totalSpend)} / {formatCurrency(TOTAL_BUDGET)}</span>
+          </div>
+          <div className="h-3 rounded-full bg-muted overflow-hidden">
+            <div
+              className={cn('h-full rounded-full transition-all', totalSpend > TOTAL_BUDGET ? 'bg-red-500' : 'bg-primary')}
+              style={{ width: `${Math.min((totalSpend / TOTAL_BUDGET) * 100, 100)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Section breakdown */}
+        <div className="grid gap-3 sm:grid-cols-3">
+          {sections.map(({ key, label, color, allocated }) => {
+            const spent = spendByCategory[key] ?? 0;
+            const pct = allocated > 0 ? Math.round((spent / allocated) * 100) : 0;
+            return (
+              <div key={key} className="rounded-lg border border-border/50 p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <div className={cn('w-2 h-2 rounded-full', color)} />
+                    <span className="text-[11px] font-medium">{label}</span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">{pct}%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-1.5">
+                  <div className={cn('h-full rounded-full', color)} style={{ width: `${Math.min(pct, 100)}%` }} />
+                </div>
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>{formatCurrency(spent)}</span>
+                  <span>{formatCurrency(allocated)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function CampaignStrategy() {
@@ -84,6 +369,7 @@ export default function CampaignStrategy() {
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [view, setView] = useState<'cards' | 'timeline'>('timeline');
   const [showAdd, setShowAdd] = useState(false);
   const [addName, setAddName] = useState('');
   const [addObjective, setAddObjective] = useState('');
@@ -154,6 +440,20 @@ export default function CampaignStrategy() {
         description="High-level strategy planning and KPI tracking"
         actions={
           <div className="flex gap-2">
+            <div className="flex rounded-md border border-border overflow-hidden">
+              <button
+                onClick={() => setView('timeline')}
+                className={cn('px-2.5 py-1.5 text-[11px] font-medium flex items-center gap-1.5 transition-colors', view === 'timeline' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}
+              >
+                <GanttChart className="h-3 w-3" /> Timeline
+              </button>
+              <button
+                onClick={() => setView('cards')}
+                className={cn('px-2.5 py-1.5 text-[11px] font-medium flex items-center gap-1.5 transition-colors border-l border-border', view === 'cards' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}
+              >
+                <LayoutList className="h-3 w-3" /> Cards
+              </button>
+            </div>
             <Button variant="outline" size="sm" className="gap-2" onClick={() => navigate('/skills')}>
               <Sparkles className="h-3.5 w-3.5" />
               Generate Ideas
@@ -222,6 +522,14 @@ export default function CampaignStrategy() {
           </p>
         </Card>
       </div>
+
+      {/* Gantt Timeline */}
+      {view === 'timeline' && strategies.length > 0 && (
+        <>
+          <GanttTimeline strategies={strategies} />
+          <BudgetTracker strategies={strategies} />
+        </>
+      )}
 
       {/* Strategy cards */}
       {strategies.length === 0 ? (
