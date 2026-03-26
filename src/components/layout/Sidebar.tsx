@@ -14,6 +14,7 @@ import {
   Video,
   MessageSquare,
   FileText,
+  BookOpen,
   Settings,
   Plug,
   LogOut,
@@ -39,6 +40,7 @@ const navSections = [
     label: 'Execution',
     items: [
       { to: '/content-calendar', label: 'Content Calendar', icon: CalendarRange },
+      { to: '/blogs', label: 'Blog Manager', icon: BookOpen },
       { to: '/campaigns', label: 'Campaign Planner', icon: Megaphone },
       { to: '/leads', label: 'Leads', icon: Users },
     ],
