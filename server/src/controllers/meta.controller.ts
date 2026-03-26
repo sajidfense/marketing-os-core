@@ -3,34 +3,38 @@ import { supabase } from '../lib/supabase';
 
 // ── Interfaces ──────────────────────────────────────────────────
 
-/** Shape of a row in meta_connections */
+/** Shape of a row in meta_connections (matches migration 002) */
 export interface MetaConnection {
   id: string;
   organization_id: string;
-  meta_user_id: string;
+  platform: string;
+  account_id: string;
+  account_name: string | null;
   access_token: string;
-  page_id: string | null;
-  page_name: string | null;
-  ad_account_id: string | null;
+  token_expires_at: string | null;
   scopes: string[];
-  connected_at: string;
-  expires_at: string | null;
+  is_active: boolean;
+  metadata: Record<string, unknown>;
+  connected_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
-/** Shape of a row in meta_daily_snapshots */
+/** Shape of a row in meta_daily_snapshots (matches migration 002) */
 export interface MetaDailySnapshot {
   id: string;
   organization_id: string;
   connection_id: string;
-  date: string;
+  snapshot_date: string;
   impressions: number;
+  reach: number;
   clicks: number;
   spend: number;
-  reach: number;
   conversions: number;
   ctr: number;
-  cpm: number;
   cpc: number;
+  cpm: number;
+  roas: number;
 }
 
 /** Aggregated overview response */
@@ -91,9 +95,9 @@ export async function listConnections(req: Request, res: Response): Promise<void
 
   const { data, error } = await supabase
     .from('meta_connections')
-    .select('id, meta_user_id, page_id, page_name, ad_account_id, scopes, connected_at, expires_at')
+    .select('id, platform, account_id, account_name, token_expires_at, scopes, is_active, created_at')
     .eq('organization_id', organizationId)
-    .order('connected_at', { ascending: false });
+    .order('created_at', { ascending: false });
 
   if (error) {
     res.status(500).json({ success: false, error: 'Failed to fetch Meta connections' });
@@ -116,7 +120,7 @@ export async function getOverview(req: Request, res: Response): Promise<void> {
     .from('meta_daily_snapshots')
     .select('impressions, clicks, spend, reach, conversions, ctr, cpm, cpc')
     .eq('organization_id', organizationId)
-    .gte('date', sinceDate);
+    .gte('snapshot_date', sinceDate);
 
   if (error) {
     res.status(500).json({ success: false, error: 'Failed to fetch Meta overview' });

@@ -151,10 +151,13 @@ async function finishOnboarding(
   }
 
   // 5. Initialize usage tracking
+  const resetDate = new Date();
+  resetDate.setDate(resetDate.getDate() + 30);
+
   await supabase
     .from('organization_usage')
     .upsert(
-      { organization_id: orgId, credits_used: 0, credits_limit: 100, period_start: new Date().toISOString() },
+      { organization_id: orgId, credits_used: 0, credits_limit: 100, reset_date: resetDate.toISOString() },
       { onConflict: 'organization_id' },
     );
 

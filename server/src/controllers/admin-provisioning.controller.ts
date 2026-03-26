@@ -107,12 +107,17 @@ export async function adminCreateOrganization(
   }
 }
 
-async function createOrgDefaults(orgId: string, _plan: string, _comped: boolean) {
+async function createOrgDefaults(orgId: string, plan: string, _comped: boolean) {
+  const { PLAN_CREDIT_LIMITS, DEFAULT_PLAN_LIMIT } = await import('../config/credits');
+  const limit = PLAN_CREDIT_LIMITS[plan] ?? DEFAULT_PLAN_LIMIT;
+  const resetDate = new Date();
+  resetDate.setDate(resetDate.getDate() + 30);
+
   // Only initialize usage tracking — branding & subscription created during onboarding
   await supabase
     .from('organization_usage')
     .upsert(
-      { organization_id: orgId, credits_used: 0, credits_limit: 100, period_start: new Date().toISOString() },
+      { organization_id: orgId, credits_used: 0, credits_limit: limit, reset_date: resetDate.toISOString() },
       { onConflict: 'organization_id' },
     );
 }
@@ -313,10 +318,15 @@ export async function adminProvisionClient(
     }
 
     // ── Step 4: Initialize usage tracking ────────────────────────
+    const { PLAN_CREDIT_LIMITS, DEFAULT_PLAN_LIMIT } = await import('../config/credits');
+    const creditLimit = PLAN_CREDIT_LIMITS[plan] ?? DEFAULT_PLAN_LIMIT;
+    const resetDate = new Date();
+    resetDate.setDate(resetDate.getDate() + 30);
+
     await supabase
       .from('organization_usage')
       .upsert(
-        { organization_id: org.id, credits_used: 0, credits_limit: 100, period_start: new Date().toISOString() },
+        { organization_id: org.id, credits_used: 0, credits_limit: creditLimit, reset_date: resetDate.toISOString() },
         { onConflict: 'organization_id' },
       );
 
