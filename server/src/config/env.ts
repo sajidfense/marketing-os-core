@@ -57,8 +57,12 @@ const envSchema = z.object({
   //   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
   INTEGRATIONS_ENCRYPTION_KEY: z
     .string()
-    .length(64, 'INTEGRATIONS_ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)')
-    .regex(/^[0-9a-fA-F]+$/, 'INTEGRATIONS_ENCRYPTION_KEY must be a hex string')
+    .transform(s => s.trim())
+    .pipe(
+      z.string()
+        .length(64, 'INTEGRATIONS_ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)')
+        .regex(/^[0-9a-fA-F]+$/, 'INTEGRATIONS_ENCRYPTION_KEY must be a hex string')
+    )
     .optional()
     .default('0'.repeat(64)),
 
