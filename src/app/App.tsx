@@ -29,6 +29,7 @@ const Semrush = lazy(() => import('@/pages/Semrush'));
 const VideoScripts = lazy(() => import('@/pages/VideoScripts'));
 const SocialCaptions = lazy(() => import('@/pages/SocialCaptions'));
 const BlogPlanner = lazy(() => import('@/pages/BlogPlanner'));
+const BlogEditor = lazy(() => import('@/pages/BlogEditor'));
 const Roadmap = lazy(() => import('@/pages/Roadmap'));
 const ContentCalendar = lazy(() => import('@/pages/ContentCalendar'));
 const Leads = lazy(() => import('@/pages/Leads'));
@@ -110,6 +111,7 @@ export default function App() {
           <Route path="/ai/video-scripts" element={<VideoScripts />} />
           <Route path="/ai/social-captions" element={<SocialCaptions />} />
           <Route path="/ai/blog-planner" element={<BlogPlanner />} />
+          <Route path="/blog/:id" element={<BlogEditor />} />
           <Route path="/roadmap" element={<Roadmap />} />
           <Route path="/content-calendar" element={<ContentCalendar />} />
           <Route path="/leads" element={<Leads />} />

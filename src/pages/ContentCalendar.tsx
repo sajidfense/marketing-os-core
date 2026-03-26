@@ -423,7 +423,11 @@ export default function ContentCalendar() {
               const tc = typeConfig[item.type];
               const Icon = tc.icon;
               return (
-                <Card key={item.id} className="p-3 hover:border-primary/20 transition-colors cursor-pointer">
+                <Card
+                  key={item.id}
+                  className="p-3 hover:border-primary/20 transition-colors cursor-pointer"
+                  onClick={() => item.type === 'blog' ? navigate(`/blog/${item.id}`) : undefined}
+                >
                   <div className="flex items-start gap-2.5">
                     <div
                       className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
@@ -436,6 +440,9 @@ export default function ContentCalendar() {
                       <div className="flex items-center gap-1.5 mt-1">
                         <Badge variant={statusVariant[item.status]} className="text-[9px]">{item.status}</Badge>
                         <span className="text-[10px] text-muted-foreground capitalize">{item.type}</span>
+                        {item.type === 'blog' && (
+                          <span className="text-[9px] text-primary">Edit →</span>
+                        )}
                       </div>
                     </div>
                   </div>
