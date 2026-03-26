@@ -98,7 +98,7 @@ export default function ContentCalendar() {
         const filtered = res.data
           .filter(
             (item) =>
-              item.scheduled_month === currentMonth &&
+              item.scheduled_month === currentMonth + 1 &&
               item.scheduled_year === currentYear,
           )
           .map(mapApiItem);
@@ -163,7 +163,7 @@ export default function ContentCalendar() {
         content_type: addType,
         status: addStatus,
         scheduled_day: dayNum,
-        scheduled_month: currentMonth,
+        scheduled_month: currentMonth + 1,
         scheduled_year: currentYear,
       });
       if (res.success && res.data) {
