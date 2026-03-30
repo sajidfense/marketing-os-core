@@ -40,6 +40,8 @@ interface ContentItem {
   type: ContentType;
   status: 'draft' | 'scheduled' | 'published';
   day: number;
+  month: number;
+  year: number;
 }
 
 interface ApiContentItem {
@@ -57,7 +59,7 @@ interface ApiContentItem {
 }
 
 function mapApiItem(item: ApiContentItem): ContentItem {
-  return { id: item.id, title: item.title, type: item.content_type, status: item.status, day: item.scheduled_day };
+  return { id: item.id, title: item.title, type: item.content_type, status: item.status, day: item.scheduled_day, month: item.scheduled_month, year: item.scheduled_year };
 }
 
 // ── Config ─────────────────────────────────────────────────────
@@ -274,11 +276,12 @@ function ContentItemModal({
 export default function ContentCalendar() {
   const navigate = useNavigate();
   const [content, setContent] = useState<ContentItem[]>([]);
+  const [allContent, setAllContent] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [view, setView] = useState<'calendar' | 'list'>('calendar');
+  const [view, setView] = useState<'calendar' | 'list' | 'schedule'>('calendar');
   const [filterType, setFilterType] = useState<ContentType | 'all'>('all');
   const [editItemId, setEditItemId] = useState<string | null>(null);
 
@@ -299,14 +302,19 @@ export default function ContentCalendar() {
       setLoading(true);
       const res = await api.get<ApiResponse<ApiContentItem[]>>('/content-items');
       if (res.success && res.data) {
-        const filtered = res.data
-          .filter((item) => item.scheduled_month === currentMonth + 1 && item.scheduled_year === currentYear)
-          .filter((item) => filterType === 'all' || item.content_type === filterType)
-          .map(mapApiItem);
-        setContent(filtered);
+        const typeFiltered = res.data
+          .filter((item) => filterType === 'all' || item.content_type === filterType);
 
-        if (!hasAutoJumped && filtered.length === 0 && res.data.length > 0) {
-          const sorted = [...res.data]
+        const monthFiltered = typeFiltered
+          .filter((item) => item.scheduled_month === currentMonth + 1 && item.scheduled_year === currentYear)
+          .map(mapApiItem);
+        setContent(monthFiltered);
+
+        // All items (across all months) for the schedule view
+        setAllContent(typeFiltered.map(mapApiItem));
+
+        if (!hasAutoJumped && monthFiltered.length === 0 && res.data.length > 0) {
+          const sorted = [...typeFiltered]
             .filter((i) => i.scheduled_year && i.scheduled_month)
             .sort((a, b) => a.scheduled_year - b.scheduled_year || a.scheduled_month - b.scheduled_month);
           if (sorted.length > 0) {
@@ -354,19 +362,21 @@ export default function ContentCalendar() {
 
   const selectedItems = selectedDay ? contentByDay[selectedDay] ?? [] : [];
 
+  const activeItems = view === 'schedule' ? allContent : content;
+
   const stats = useMemo(() => ({
-    total: content.length,
-    published: content.filter((c) => c.status === 'published').length,
-    scheduled: content.filter((c) => c.status === 'scheduled').length,
-    draft: content.filter((c) => c.status === 'draft').length,
-  }), [content]);
+    total: activeItems.length,
+    published: activeItems.filter((c) => c.status === 'published').length,
+    scheduled: activeItems.filter((c) => c.status === 'scheduled').length,
+    draft: activeItems.filter((c) => c.status === 'draft').length,
+  }), [activeItems]);
 
   // Type breakdown for stats
   const typeBreakdown = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const item of content) counts[item.type] = (counts[item.type] ?? 0) + 1;
+    for (const item of activeItems) counts[item.type] = (counts[item.type] ?? 0) + 1;
     return counts;
-  }, [content]);
+  }, [activeItems]);
 
   async function handleAdd(e: FormEvent) {
     e.preventDefault();
@@ -420,7 +430,7 @@ export default function ContentCalendar() {
               ))}
             </div>
             <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
-              {(['calendar', 'list'] as const).map((v) => (
+              {(['calendar', 'list', 'schedule'] as const).map((v) => (
                 <button key={v} onClick={() => setView(v)}
                   className={cn('rounded-md px-2.5 py-1 text-xs font-medium transition-colors capitalize', view === v ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
                   {v}
@@ -503,11 +513,11 @@ export default function ContentCalendar() {
         </div>
       )}
 
-      {!loading && content.length === 0 && (
-        <EmptyState icon={CalendarRange} title="No content yet" description="Create your first post to start building your content calendar." actionLabel="New Content" onAction={() => setShowAdd(true)} />
+      {!loading && activeItems.length === 0 && (
+        <EmptyState icon={CalendarRange} title="No content yet" description={filterType !== 'all' ? `No ${typeConfig[filterType].label.toLowerCase()} content found. Try a different filter or month.` : "Create your first post to start building your content calendar."} actionLabel="New Content" onAction={() => setShowAdd(true)} />
       )}
 
-      {!loading && content.length > 0 && (
+      {!loading && activeItems.length > 0 && (
         <>
           {/* Stats */}
           <div className="grid gap-3 sm:grid-cols-4">
@@ -631,7 +641,7 @@ export default function ContentCalendar() {
                 )}
               </div>
             </div>
-          ) : (
+          ) : view === 'list' ? (
             /* ── List view ────────────────────────────────── */
             <Card>
               <div className="flex items-center justify-between p-4 border-b border-border/50">
@@ -663,7 +673,39 @@ export default function ContentCalendar() {
                 })}
               </div>
             </Card>
-          )}
+          ) : view === 'schedule' ? (
+            /* ── Schedule view (all months) ──────────────── */
+            <Card>
+              <div className="flex items-center justify-between p-4 border-b border-border/50">
+                <h2 className="text-sm font-semibold">Full Schedule — {filterType === 'all' ? 'All Types' : typeConfig[filterType].label} ({allContent.length} items)</h2>
+              </div>
+              <div className="divide-y divide-border/30 max-h-[70vh] overflow-y-auto">
+                {[...allContent]
+                  .sort((a, b) => a.year - b.year || a.month - b.month || a.day - b.day)
+                  .map((item) => {
+                    const tc = typeConfig[item.type];
+                    const Icon = tc.icon;
+                    return (
+                      <div key={item.id}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 cursor-pointer transition-colors"
+                        onClick={() => openItem(item)}>
+                        <span className="text-xs text-muted-foreground tabular-nums w-20 shrink-0">
+                          {item.year}-{String(item.month).padStart(2, '0')}-{String(item.day).padStart(2, '0')}
+                        </span>
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `${tc.color}15`, color: tc.color }}>
+                          <Icon className="h-3.5 w-3.5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium truncate">{item.title}</p>
+                        </div>
+                        <Badge variant={statusVariant[item.status]} className="text-[9px] shrink-0">{item.status}</Badge>
+                        <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: tc.color }} title={tc.label} />
+                      </div>
+                    );
+                  })}
+              </div>
+            </Card>
+          ) : null}
         </>
       )}
     </div>
