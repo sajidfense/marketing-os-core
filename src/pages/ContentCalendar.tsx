@@ -279,6 +279,7 @@ export default function ContentCalendar() {
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [view, setView] = useState<'calendar' | 'list'>('calendar');
+  const [filterType, setFilterType] = useState<ContentType | 'all'>('all');
   const [editItemId, setEditItemId] = useState<string | null>(null);
 
   // Add dialog state
@@ -300,6 +301,7 @@ export default function ContentCalendar() {
       if (res.success && res.data) {
         const filtered = res.data
           .filter((item) => item.scheduled_month === currentMonth + 1 && item.scheduled_year === currentYear)
+          .filter((item) => filterType === 'all' || item.content_type === filterType)
           .map(mapApiItem);
         setContent(filtered);
 
@@ -319,7 +321,7 @@ export default function ContentCalendar() {
     } finally {
       setLoading(false);
     }
-  }, [currentMonth, currentYear, hasAutoJumped]);
+  }, [currentMonth, currentYear, hasAutoJumped, filterType]);
 
   useEffect(() => { fetchContent(); }, [fetchContent]);
 
@@ -401,13 +403,20 @@ export default function ContentCalendar() {
         description="Plan and schedule your content pipeline"
         actions={
           <div className="flex gap-2">
-            {/* Type legend */}
-            <div className="hidden sm:flex items-center gap-3 mr-2">
+            {/* Type filter */}
+            <div className="hidden sm:flex items-center gap-1 rounded-lg bg-muted p-0.5 mr-1">
+              <button
+                onClick={() => setFilterType('all')}
+                className={cn('rounded-md px-2 py-1 text-[10px] font-medium transition-colors', filterType === 'all' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+                All
+              </button>
               {Object.entries(typeConfig).map(([key, cfg]) => (
-                <div key={key} className="flex items-center gap-1">
-                  <div className="h-2 w-2 rounded-full" style={{ backgroundColor: cfg.color }} />
-                  <span className="text-[10px] text-muted-foreground">{cfg.label} {typeBreakdown[key] ? `(${typeBreakdown[key]})` : ''}</span>
-                </div>
+                <button key={key} onClick={() => setFilterType(key as ContentType)}
+                  className={cn('rounded-md px-2 py-1 text-[10px] font-medium transition-colors flex items-center gap-1', filterType === key ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                  style={filterType === key ? { color: cfg.color } : undefined}>
+                  <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: cfg.color }} />
+                  {cfg.label}{typeBreakdown[key] ? ` (${typeBreakdown[key]})` : ''}
+                </button>
               ))}
             </div>
             <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">

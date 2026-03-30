@@ -6,7 +6,7 @@ const createSchema = z.object({
   content_type:    z.enum(['blog', 'social', 'video', 'email']).optional(),
   status:          z.enum(['draft', 'scheduled', 'published']).optional(),
   scheduled_day:   z.number().int().min(1).max(31).optional(),
-  scheduled_month: z.number().int().min(0).max(11).optional(),
+  scheduled_month: z.number().int().min(1).max(12).optional(),
   scheduled_year:  z.number().int().optional(),
   body:            z.string().optional(),
   metadata:        z.record(z.unknown()).optional(),
